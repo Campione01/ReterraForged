@@ -13,7 +13,7 @@ public record Threshold(Noise input, Noise lower, Noise upper, Noise threshold) 
 	).apply(instance, Threshold::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		if(this.input.compute(x, z, seed) > this.threshold.compute(x, z, seed)) {
 			return this.upper.compute(x, z, seed);
 		} else {

@@ -18,7 +18,7 @@ record Boost(Noise input, int iterations) implements Noise {
 	}
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float value = this.input.compute(x, z, seed);
         for (int i = 0; i < this.iterations; ++i) {
             value = NoiseUtil.pow(value, 1.0F - value);

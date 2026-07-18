@@ -12,7 +12,7 @@ record Invert(Noise input) implements Noise {
 	).apply(instance, Invert::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float min = this.input.minValue();
 		float max = this.input.maxValue();
 		return max - NoiseUtil.clamp(this.input.compute(x, z, seed), min, max);

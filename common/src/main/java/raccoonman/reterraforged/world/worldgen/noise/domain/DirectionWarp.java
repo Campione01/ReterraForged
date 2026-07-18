@@ -8,7 +8,7 @@ import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise.Visitor;
 
-record DirectionWarp(Noise direction, Noise strength) implements Domain {
+public record DirectionWarp(Noise direction, Noise strength) implements Domain {
 	public static final MapCodec<DirectionWarp> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Noise.HOLDER_HELPER_CODEC.fieldOf("direction").forGetter(DirectionWarp::direction),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("strength").forGetter(DirectionWarp::strength)

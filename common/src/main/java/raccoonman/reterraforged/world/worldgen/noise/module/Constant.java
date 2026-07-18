@@ -6,7 +6,7 @@ record Constant(float value) implements Noise {
 	public static final MapCodec<Constant> CODEC = Noises.NOISE_VALUE_CODEC.xmap(Constant::new, Constant::value).fieldOf("value");
 
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return this.value;
 	}
 

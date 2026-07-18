@@ -1,8 +1,12 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::slice;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, OnceLock, RwLock};
 
-use quick_noise::{BatchNoise, Fbm, Grid, Perlin};
+use quick_noise::simd::SimdSliceIterExt;
+use quick_noise::{BatchNoise, Billow, Cellular, Fbm, Grid, Perlin, Ridged, Simplex, Value};
 
 pub const TILE_SIZE: usize = 32;
 pub const TILE_SAMPLES: usize = TILE_SIZE * TILE_SIZE * TILE_SIZE;
@@ -10,8 +14,65 @@ pub const TILE_SAMPLES: usize = TILE_SIZE * TILE_SIZE * TILE_SIZE;
 const SUCCESS: i32 = 0;
 const INVALID_ARGUMENT: i32 = 1;
 const PANIC: i32 = 2;
+const INVALID_PROGRAM: i32 = 3;
 const QUANTIZATION: f32 = 4096.0;
-const ABI_VERSION: u32 = 1;
+const ABI_VERSION: u32 = 2;
+
+const PROGRAM_MAGIC: u32 = u32::from_le_bytes(*b"QNV2");
+const PROGRAM_VERSION: u32 = 2;
+const PROGRAM_HEADER_BYTES: usize = 20;
+const PROGRAM_NODE_BYTES: usize = 48;
+
+const GRID_BACKEND_AVAILABLE: bool = cfg!(any(
+    all(target_arch = "x86_64", target_feature = "sse4.2"),
+    all(
+        target_arch = "x86_64",
+        target_feature = "avx2",
+        target_feature = "fma"
+    ),
+    all(
+        target_arch = "x86_64",
+        target_feature = "avx512f",
+        target_feature = "fma"
+    ),
+    all(target_arch = "aarch64", target_feature = "neon")
+));
+
+const OP_CONSTANT: u32 = 0;
+const OP_PERLIN_FBM: u32 = 1;
+const OP_VALUE_FBM: u32 = 2;
+const OP_SIMPLEX_FBM: u32 = 3;
+const OP_CELLULAR_FBM: u32 = 4;
+const OP_PERLIN_BILLOW: u32 = 5;
+const OP_PERLIN_RIDGED: u32 = 6;
+const OP_SIMPLEX_RIDGED: u32 = 7;
+const OP_ADD: u32 = 16;
+const OP_MULTIPLY: u32 = 17;
+const OP_MIN: u32 = 18;
+const OP_MAX: u32 = 19;
+const OP_ABS: u32 = 20;
+const OP_CLAMP: u32 = 21;
+const OP_MAP: u32 = 22;
+const OP_INVERT: u32 = 23;
+const OP_CURVE3: u32 = 24;
+const OP_CURVE5: u32 = 25;
+const OP_LERP: u32 = 26;
+const OP_POW: u32 = 27;
+const OP_GREATER: u32 = 28;
+const OP_SIGNED_POW: u32 = 29;
+const OP_BOOST: u32 = 30;
+const OP_STEPS: u32 = 31;
+const OP_COORD_X: u32 = 32;
+const OP_COORD_Z: u32 = 33;
+const OP_SIN: u32 = 34;
+const OP_COS: u32 = 35;
+const OP_DIVIDE: u32 = 36;
+const OP_POW_DYNAMIC: u32 = 37;
+const OP_ROUND: u32 = 38;
+const OP_GREATER_EQUAL: u32 = 39;
+
+static NEXT_PROGRAM_HANDLE: AtomicU64 = AtomicU64::new(1);
+static PROGRAMS: OnceLock<RwLock<HashMap<u64, Arc<Program>>>> = OnceLock::new();
 
 #[derive(Default)]
 struct Scratch {
@@ -20,6 +81,36 @@ struct Scratch {
     spaghetti_b: Vec<f32>,
     noodle_a: Vec<f32>,
     noodle_b: Vec<f32>,
+}
+
+#[derive(Clone, Debug)]
+struct ProgramNode {
+    opcode: u32,
+    input_a: i32,
+    input_b: i32,
+    input_c: i32,
+    seed_offset: i64,
+    params: [f32; 6],
+}
+
+#[derive(Debug)]
+struct Program {
+    nodes: Vec<ProgramNode>,
+    roots: Vec<usize>,
+}
+
+#[derive(Default)]
+struct ProgramScratch {
+    buffers: Vec<Vec<f32>>,
+}
+
+impl ProgramScratch {
+    fn resize(&mut self, node_count: usize, sample_count: usize) {
+        self.buffers.resize_with(node_count, Vec::new);
+        for buffer in &mut self.buffers {
+            buffer.resize(sample_count, 0.0);
+        }
+    }
 }
 
 impl Scratch {
@@ -34,6 +125,7 @@ impl Scratch {
 
 thread_local! {
     static SCRATCH: RefCell<Scratch> = RefCell::new(Scratch::default());
+    static PROGRAM_SCRATCH: RefCell<ProgramScratch> = RefCell::new(ProgramScratch::default());
 }
 
 pub fn fill_cave_tile_v1(
@@ -123,6 +215,621 @@ fn fill_field(
         .fill(output);
 }
 
+fn programs() -> &'static RwLock<HashMap<u64, Arc<Program>>> {
+    PROGRAMS.get_or_init(|| RwLock::new(HashMap::new()))
+}
+
+fn parse_program(bytes: &[u8]) -> Result<Program, ()> {
+    if bytes.len() < PROGRAM_HEADER_BYTES {
+        return Err(());
+    }
+    let mut offset = 0;
+    let magic = read_u32(bytes, &mut offset)?;
+    let version = read_u32(bytes, &mut offset)?;
+    let node_count = read_u32(bytes, &mut offset)? as usize;
+    let root_count = read_u32(bytes, &mut offset)? as usize;
+    let node_bytes = read_u32(bytes, &mut offset)? as usize;
+    if magic != PROGRAM_MAGIC
+        || version != PROGRAM_VERSION
+        || node_bytes != PROGRAM_NODE_BYTES
+        || node_count == 0
+        || node_count > 4096
+        || root_count == 0
+        || root_count > 64
+    {
+        return Err(());
+    }
+    let expected = PROGRAM_HEADER_BYTES
+        .checked_add(node_count.checked_mul(PROGRAM_NODE_BYTES).ok_or(())?)
+        .and_then(|length| length.checked_add(root_count.checked_mul(4)?))
+        .ok_or(())?;
+    if bytes.len() != expected {
+        return Err(());
+    }
+
+    let mut nodes = Vec::with_capacity(node_count);
+    for index in 0..node_count {
+        let opcode = read_u32(bytes, &mut offset)?;
+        let input_a = read_i32(bytes, &mut offset)?;
+        let input_b = read_i32(bytes, &mut offset)?;
+        let input_c = read_i32(bytes, &mut offset)?;
+        let seed_offset = read_i64(bytes, &mut offset)?;
+        let mut params = [0.0; 6];
+        for value in &mut params {
+            *value = read_f32(bytes, &mut offset)?;
+            if !value.is_finite() {
+                return Err(());
+            }
+        }
+        validate_node(opcode, input_a, input_b, input_c, index)?;
+        if opcode == OP_STEPS && params[0] <= 0.0 {
+            return Err(());
+        }
+        nodes.push(ProgramNode {
+            opcode,
+            input_a,
+            input_b,
+            input_c,
+            seed_offset,
+            params,
+        });
+    }
+
+    let mut roots = Vec::with_capacity(root_count);
+    for _ in 0..root_count {
+        let root = read_u32(bytes, &mut offset)? as usize;
+        if root >= node_count {
+            return Err(());
+        }
+        roots.push(root);
+    }
+    Ok(Program { nodes, roots })
+}
+
+fn validate_node(
+    opcode: u32,
+    input_a: i32,
+    input_b: i32,
+    input_c: i32,
+    index: usize,
+) -> Result<(), ()> {
+    let valid_input = |input: i32| input >= 0 && (input as usize) < index;
+    match opcode {
+        OP_CONSTANT | OP_COORD_X | OP_COORD_Z => Ok(()),
+        OP_PERLIN_FBM | OP_VALUE_FBM | OP_SIMPLEX_FBM | OP_CELLULAR_FBM | OP_PERLIN_BILLOW
+        | OP_PERLIN_RIDGED | OP_SIMPLEX_RIDGED => {
+            let coordinates_are_valid =
+                (input_b == -1 && input_c == -1) || (valid_input(input_b) && valid_input(input_c));
+            if (1..=32).contains(&input_a) && coordinates_are_valid {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        OP_ADD | OP_MULTIPLY | OP_MIN | OP_MAX | OP_GREATER | OP_DIVIDE | OP_POW_DYNAMIC
+        | OP_GREATER_EQUAL => {
+            if valid_input(input_a) && valid_input(input_b) {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        OP_ABS | OP_CLAMP | OP_MAP | OP_INVERT | OP_CURVE3 | OP_CURVE5 | OP_POW | OP_SIGNED_POW
+        | OP_BOOST | OP_STEPS | OP_SIN | OP_COS | OP_ROUND => {
+            if valid_input(input_a) {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        OP_LERP => {
+            if valid_input(input_a) && valid_input(input_b) && valid_input(input_c) {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        _ => Err(()),
+    }
+}
+
+fn fill_program_2d(
+    program: &Program,
+    seed: i64,
+    origin_x: i32,
+    origin_z: i32,
+    width: usize,
+    height: usize,
+    output: &mut [f32],
+) -> Result<(), ()> {
+    if width == 0 || height == 0 || width > 8192 || height > 8192 {
+        return Err(());
+    }
+    let sample_count = width.checked_mul(height).ok_or(())?;
+    let output_count = sample_count.checked_mul(program.roots.len()).ok_or(())?;
+    if output.len() != output_count {
+        return Err(());
+    }
+    let grid = Grid::<2>::new(width, height).sample_position(origin_x, origin_z);
+    PROGRAM_SCRATCH.with_borrow_mut(|scratch| {
+        scratch.resize(program.nodes.len(), sample_count);
+        for (index, node) in program.nodes.iter().enumerate() {
+            let (inputs, current) = scratch.buffers.split_at_mut(index);
+            let target = &mut current[0];
+            match node.opcode {
+                OP_CONSTANT => target.fill(node.params[0]),
+                OP_COORD_X => fill_coordinate_x(origin_x, width, target),
+                OP_COORD_Z => fill_coordinate_z(origin_z, width, target),
+                OP_PERLIN_FBM => fill_fbm_perlin(&grid, inputs, seed, node, target),
+                OP_VALUE_FBM => fill_fbm_value(&grid, inputs, seed, node, target),
+                OP_SIMPLEX_FBM => fill_fbm_simplex(&grid, inputs, seed, node, target),
+                OP_CELLULAR_FBM => fill_fbm_cellular(&grid, inputs, seed, node, target),
+                OP_PERLIN_BILLOW => fill_billow_perlin(&grid, inputs, seed, node, target),
+                OP_PERLIN_RIDGED => fill_ridged_perlin(&grid, inputs, seed, node, target),
+                OP_SIMPLEX_RIDGED => fill_ridged_simplex(&grid, inputs, seed, node, target),
+                OP_ADD => apply_binary(inputs, node, target, |a, b| a + b),
+                OP_MULTIPLY => apply_binary(inputs, node, target, |a, b| a * b),
+                OP_MIN => apply_binary(inputs, node, target, f32::min),
+                OP_MAX => apply_binary(inputs, node, target, f32::max),
+                OP_ABS => apply_unary(inputs, node, target, f32::abs),
+                OP_CLAMP => {
+                    let min = node.params[0];
+                    let max = node.params[1];
+                    apply_unary(inputs, node, target, |value| value.clamp(min, max));
+                }
+                OP_MAP => {
+                    let in_min = node.params[0];
+                    let in_max = node.params[1];
+                    let out_min = node.params[2];
+                    let out_max = node.params[3];
+                    let scale = if in_max == in_min {
+                        0.0
+                    } else {
+                        (out_max - out_min) / (in_max - in_min)
+                    };
+                    apply_unary(inputs, node, target, |value| {
+                        out_min + (value - in_min) * scale
+                    });
+                }
+                OP_INVERT => apply_unary(inputs, node, target, |value| 1.0 - value),
+                OP_CURVE3 => apply_unary(inputs, node, target, |value| {
+                    value * value * (3.0 - 2.0 * value)
+                }),
+                OP_CURVE5 => apply_unary(inputs, node, target, |value| {
+                    value * value * value * (value * (value * 6.0 - 15.0) + 10.0)
+                }),
+                OP_LERP => apply_ternary(inputs, node, target, |alpha, lower, upper| {
+                    lower + alpha * (upper - lower)
+                }),
+                OP_POW => {
+                    let power = node.params[0];
+                    apply_unary(inputs, node, target, |value| value.powf(power));
+                }
+                OP_GREATER => {
+                    apply_binary(inputs, node, target, |a, b| if a > b { 1.0 } else { 0.0 })
+                }
+                OP_DIVIDE => apply_binary(
+                    inputs,
+                    node,
+                    target,
+                    |a, b| {
+                        if b == 0.0 { 0.0 } else { a / b }
+                    },
+                ),
+                OP_POW_DYNAMIC => {
+                    apply_binary(inputs, node, target, |value, power| value.powf(power))
+                }
+                OP_ROUND => apply_unary(inputs, node, target, f32::round),
+                OP_GREATER_EQUAL => {
+                    apply_binary(inputs, node, target, |a, b| if a >= b { 1.0 } else { 0.0 })
+                }
+                OP_SIGNED_POW => {
+                    let power = node.params[0];
+                    apply_unary(inputs, node, target, |value| {
+                        value.abs().powf(power).copysign(value)
+                    });
+                }
+                OP_BOOST => {
+                    let iterations = node.params[0].clamp(1.0, 32.0) as usize;
+                    apply_unary(inputs, node, target, |mut value| {
+                        for _ in 0..iterations {
+                            value = value.powf(1.0 - value);
+                        }
+                        value
+                    });
+                }
+                OP_STEPS => {
+                    let step_count = node.params[0];
+                    let slope_min = node.params[1];
+                    let slope_max = node.params[2];
+                    let curve = node.params[3] as i32;
+                    apply_unary(inputs, node, target, |mut value| {
+                        let range = slope_max - slope_min;
+                        if range <= 0.0 {
+                            return (value * step_count).trunc() / step_count;
+                        }
+                        value = 1.0 - value;
+                        let stepped = (value * step_count).trunc() / step_count;
+                        let delta = value - stepped;
+                        let alpha = (delta * step_count - slope_min) / range;
+                        let alpha = match curve {
+                            1 => alpha * alpha * (3.0 - 2.0 * alpha),
+                            2 => alpha * alpha * alpha * (alpha * (alpha * 6.0 - 15.0) + 10.0),
+                            _ => alpha,
+                        };
+                        1.0 - (stepped + alpha * (value - stepped))
+                    });
+                }
+                OP_SIN => apply_unary(inputs, node, target, f32::sin),
+                OP_COS => apply_unary(inputs, node, target, f32::cos),
+                _ => return Err(()),
+            }
+        }
+
+        for (root_index, root) in program.roots.iter().copied().enumerate() {
+            let source = &scratch.buffers[root];
+            let target = &mut output[root_index * sample_count..(root_index + 1) * sample_count];
+            for (target, source) in target.iter_mut().zip(source) {
+                *target = quantize(*source);
+            }
+        }
+        Ok(())
+    })
+}
+
+fn fill_fbm_perlin(
+    grid: &Grid<2>,
+    inputs: &[Vec<f32>],
+    seed: i64,
+    node: &ProgramNode,
+    output: &mut [f32],
+) {
+    if let Some((x, z)) = node_coordinates(inputs, node) {
+        BatchNoise::<2, Fbm, Perlin>::builder(x.simd_iter(), z.simd_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else if GRID_BACKEND_AVAILABLE && node.params[0].abs() < 1.0 {
+        grid.seed(seed)
+            .builder::<Fbm, Perlin>()
+            .seed(node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else {
+        BatchNoise::<2, Fbm, Perlin>::builder(grid.x_iter(), grid.y_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    }
+}
+
+fn fill_fbm_value(
+    grid: &Grid<2>,
+    inputs: &[Vec<f32>],
+    seed: i64,
+    node: &ProgramNode,
+    output: &mut [f32],
+) {
+    if let Some((x, z)) = node_coordinates(inputs, node) {
+        BatchNoise::<2, Fbm, Value>::builder(x.simd_iter(), z.simd_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else if GRID_BACKEND_AVAILABLE && node.params[0].abs() < 1.0 {
+        grid.seed(seed)
+            .builder::<Fbm, Value>()
+            .seed(node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else {
+        BatchNoise::<2, Fbm, Value>::builder(grid.x_iter(), grid.y_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    }
+}
+
+fn fill_fbm_simplex(
+    grid: &Grid<2>,
+    inputs: &[Vec<f32>],
+    seed: i64,
+    node: &ProgramNode,
+    output: &mut [f32],
+) {
+    if let Some((x, z)) = node_coordinates(inputs, node) {
+        BatchNoise::<2, Fbm, Simplex>::builder(x.simd_iter(), z.simd_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+        return;
+    }
+    BatchNoise::<2, Fbm, Simplex>::builder(grid.x_iter(), grid.y_iter())
+        .seed_with_grid(seed, node.seed_offset)
+        .octaves(node.input_a as usize)
+        .frequency(node.params[0])
+        .lacunarity(node.params[1])
+        .persistence(node.params[2])
+        .amplitude(node.params[3])
+        .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+        .fill(output);
+}
+
+fn fill_fbm_cellular(
+    grid: &Grid<2>,
+    inputs: &[Vec<f32>],
+    seed: i64,
+    node: &ProgramNode,
+    output: &mut [f32],
+) {
+    if let Some((x, z)) = node_coordinates(inputs, node) {
+        BatchNoise::<2, Fbm, Cellular>::builder(x.simd_iter(), z.simd_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+        return;
+    }
+    BatchNoise::<2, Fbm, Cellular>::builder(grid.x_iter(), grid.y_iter())
+        .seed_with_grid(seed, node.seed_offset)
+        .octaves(node.input_a as usize)
+        .frequency(node.params[0])
+        .lacunarity(node.params[1])
+        .persistence(node.params[2])
+        .amplitude(node.params[3])
+        .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+        .fill(output);
+}
+
+fn fill_billow_perlin(
+    grid: &Grid<2>,
+    inputs: &[Vec<f32>],
+    seed: i64,
+    node: &ProgramNode,
+    output: &mut [f32],
+) {
+    if let Some((x, z)) = node_coordinates(inputs, node) {
+        BatchNoise::<2, Billow, Perlin>::builder(x.simd_iter(), z.simd_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else if GRID_BACKEND_AVAILABLE && node.params[0].abs() < 1.0 {
+        grid.seed(seed)
+            .builder::<Billow, Perlin>()
+            .seed(node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else {
+        BatchNoise::<2, Billow, Perlin>::builder(grid.x_iter(), grid.y_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    }
+}
+
+fn fill_ridged_perlin(
+    grid: &Grid<2>,
+    inputs: &[Vec<f32>],
+    seed: i64,
+    node: &ProgramNode,
+    output: &mut [f32],
+) {
+    if let Some((x, z)) = node_coordinates(inputs, node) {
+        BatchNoise::<2, Ridged, Perlin>::builder(x.simd_iter(), z.simd_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else if GRID_BACKEND_AVAILABLE && node.params[0].abs() < 1.0 {
+        grid.seed(seed)
+            .builder::<Ridged, Perlin>()
+            .seed(node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else {
+        BatchNoise::<2, Ridged, Perlin>::builder(grid.x_iter(), grid.y_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    }
+}
+
+fn fill_ridged_simplex(
+    grid: &Grid<2>,
+    inputs: &[Vec<f32>],
+    seed: i64,
+    node: &ProgramNode,
+    output: &mut [f32],
+) {
+    if let Some((x, z)) = node_coordinates(inputs, node) {
+        BatchNoise::<2, Ridged, Simplex>::builder(x.simd_iter(), z.simd_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    } else {
+        BatchNoise::<2, Ridged, Simplex>::builder(grid.x_iter(), grid.y_iter())
+            .seed_with_grid(seed, node.seed_offset)
+            .octaves(node.input_a as usize)
+            .frequency(node.params[0])
+            .lacunarity(node.params[1])
+            .persistence(node.params[2])
+            .amplitude(node.params[3])
+            .scaling(axis_scale(node.params[4]), axis_scale(node.params[5]))
+            .fill(output);
+    }
+}
+
+fn node_coordinates<'a>(
+    inputs: &'a [Vec<f32>],
+    node: &ProgramNode,
+) -> Option<(&'a [f32], &'a [f32])> {
+    if node.input_b < 0 || node.input_c < 0 {
+        return None;
+    }
+    Some((
+        &inputs[node.input_b as usize],
+        &inputs[node.input_c as usize],
+    ))
+}
+
+fn fill_coordinate_x(origin_x: i32, width: usize, output: &mut [f32]) {
+    for (index, value) in output.iter_mut().enumerate() {
+        *value = (origin_x + (index % width) as i32) as f32;
+    }
+}
+
+fn fill_coordinate_z(origin_z: i32, width: usize, output: &mut [f32]) {
+    for (index, value) in output.iter_mut().enumerate() {
+        *value = (origin_z + (index / width) as i32) as f32;
+    }
+}
+
+fn axis_scale(value: f32) -> f32 {
+    value
+}
+
+fn apply_unary(
+    inputs: &[Vec<f32>],
+    node: &ProgramNode,
+    output: &mut [f32],
+    operation: impl Fn(f32) -> f32,
+) {
+    let input = &inputs[node.input_a as usize];
+    for (output, input) in output.iter_mut().zip(input) {
+        *output = operation(*input);
+    }
+}
+
+fn apply_binary(
+    inputs: &[Vec<f32>],
+    node: &ProgramNode,
+    output: &mut [f32],
+    operation: impl Fn(f32, f32) -> f32,
+) {
+    let input_a = &inputs[node.input_a as usize];
+    let input_b = &inputs[node.input_b as usize];
+    for ((output, input_a), input_b) in output.iter_mut().zip(input_a).zip(input_b) {
+        *output = operation(*input_a, *input_b);
+    }
+}
+
+fn apply_ternary(
+    inputs: &[Vec<f32>],
+    node: &ProgramNode,
+    output: &mut [f32],
+    operation: impl Fn(f32, f32, f32) -> f32,
+) {
+    let input_a = &inputs[node.input_a as usize];
+    let input_b = &inputs[node.input_b as usize];
+    let input_c = &inputs[node.input_c as usize];
+    for (((output, input_a), input_b), input_c) in
+        output.iter_mut().zip(input_a).zip(input_b).zip(input_c)
+    {
+        *output = operation(*input_a, *input_b, *input_c);
+    }
+}
+
+fn read_u32(bytes: &[u8], offset: &mut usize) -> Result<u32, ()> {
+    let value = u32::from_le_bytes(read_array(bytes, offset)?);
+    Ok(value)
+}
+
+fn read_i32(bytes: &[u8], offset: &mut usize) -> Result<i32, ()> {
+    let value = i32::from_le_bytes(read_array(bytes, offset)?);
+    Ok(value)
+}
+
+fn read_i64(bytes: &[u8], offset: &mut usize) -> Result<i64, ()> {
+    let value = i64::from_le_bytes(read_array(bytes, offset)?);
+    Ok(value)
+}
+
+fn read_f32(bytes: &[u8], offset: &mut usize) -> Result<f32, ()> {
+    let value = f32::from_le_bytes(read_array(bytes, offset)?);
+    Ok(value)
+}
+
+fn read_array<const N: usize>(bytes: &[u8], offset: &mut usize) -> Result<[u8; N], ()> {
+    let end = offset.checked_add(N).ok_or(())?;
+    let source = bytes.get(*offset..end).ok_or(())?;
+    let mut value = [0; N];
+    value.copy_from_slice(source);
+    *offset = end;
+    Ok(value)
+}
+
 fn quantize(value: f32) -> f32 {
     (value * QUANTIZATION).round() / QUANTIZATION
 }
@@ -135,6 +842,103 @@ pub extern "C" fn rtf_quick_noise_abi_version() -> u32 {
 #[unsafe(no_mangle)]
 pub extern "C" fn rtf_quick_noise_tile_samples() -> usize {
     TILE_SAMPLES
+}
+
+/// Compiles one validated QUICK_V2 program and returns an opaque handle.
+///
+/// # Safety
+/// `program_bytes` must point to `program_length` readable bytes and
+/// `output_handle` must point to one writable `u64`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rtf_quick_noise_compile_program_v2(
+    program_bytes: *const u8,
+    program_length: usize,
+    output_handle: *mut u64,
+) -> i32 {
+    if program_bytes.is_null() || output_handle.is_null() || program_length == 0 {
+        return INVALID_ARGUMENT;
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let bytes = unsafe { slice::from_raw_parts(program_bytes, program_length) };
+        let program = parse_program(bytes).map_err(|_| INVALID_PROGRAM)?;
+        let handle = NEXT_PROGRAM_HANDLE.fetch_add(1, Ordering::Relaxed);
+        if handle == 0 {
+            return Err(INVALID_PROGRAM);
+        }
+        programs()
+            .write()
+            .map_err(|_| PANIC)?
+            .insert(handle, Arc::new(program));
+        unsafe { output_handle.write(handle) };
+        Ok(())
+    }));
+    match result {
+        Ok(Ok(())) => SUCCESS,
+        Ok(Err(status)) => status,
+        Err(_) => PANIC,
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rtf_quick_noise_program_outputs_v2(handle: u64) -> usize {
+    programs()
+        .read()
+        .ok()
+        .and_then(|programs| programs.get(&handle).map(|program| program.roots.len()))
+        .unwrap_or(0)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rtf_quick_noise_free_program_v2(handle: u64) -> i32 {
+    if handle == 0 {
+        return INVALID_ARGUMENT;
+    }
+    match programs().write() {
+        Ok(mut programs) => {
+            if programs.remove(&handle).is_some() {
+                SUCCESS
+            } else {
+                INVALID_PROGRAM
+            }
+        }
+        Err(_) => PANIC,
+    }
+}
+
+/// Fills all QUICK_V2 root fields in root-major, x-fastest order.
+///
+/// # Safety
+/// `output` must point to `output_length` writable `f32` values.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn rtf_quick_noise_fill_program_2d_v2(
+    handle: u64,
+    seed: i64,
+    origin_x: i32,
+    origin_z: i32,
+    width: usize,
+    height: usize,
+    output: *mut f32,
+    output_length: usize,
+) -> i32 {
+    if handle == 0 || output.is_null() || output_length == 0 {
+        return INVALID_ARGUMENT;
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let program = programs()
+            .read()
+            .map_err(|_| PANIC)?
+            .get(&handle)
+            .cloned()
+            .ok_or(INVALID_PROGRAM)?;
+        let output = unsafe { slice::from_raw_parts_mut(output, output_length) };
+        fill_program_2d(&program, seed, origin_x, origin_z, width, height, output)
+            .map_err(|_| INVALID_ARGUMENT)
+    }));
+    match result {
+        Ok(Ok(())) => SUCCESS,
+        Ok(Err(status)) => status,
+        Err(_) => PANIC,
+    }
 }
 
 /// Fills one globally aligned QUICK_V1 cave tile in x-fastest order.
@@ -194,6 +998,167 @@ mod tests {
             NOODLE_WIDTH,
             output,
         );
+    }
+
+    fn encode_program(nodes: &[ProgramNode], roots: &[u32]) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(
+            PROGRAM_HEADER_BYTES + nodes.len() * PROGRAM_NODE_BYTES + roots.len() * 4,
+        );
+        bytes.extend_from_slice(&PROGRAM_MAGIC.to_le_bytes());
+        bytes.extend_from_slice(&PROGRAM_VERSION.to_le_bytes());
+        bytes.extend_from_slice(&(nodes.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&(roots.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&(PROGRAM_NODE_BYTES as u32).to_le_bytes());
+        for node in nodes {
+            bytes.extend_from_slice(&node.opcode.to_le_bytes());
+            bytes.extend_from_slice(&node.input_a.to_le_bytes());
+            bytes.extend_from_slice(&node.input_b.to_le_bytes());
+            bytes.extend_from_slice(&node.input_c.to_le_bytes());
+            bytes.extend_from_slice(&node.seed_offset.to_le_bytes());
+            for value in node.params {
+                bytes.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+        for root in roots {
+            bytes.extend_from_slice(&root.to_le_bytes());
+        }
+        bytes
+    }
+
+    fn test_program_bytes() -> Vec<u8> {
+        encode_program(
+            &[
+                ProgramNode {
+                    opcode: OP_PERLIN_FBM,
+                    input_a: 4,
+                    input_b: -1,
+                    input_c: -1,
+                    seed_offset: 0x514E_5632,
+                    params: [1.0 / 64.0, 2.0, 0.5, 1.0, 1.0, 1.0],
+                },
+                ProgramNode {
+                    opcode: OP_CONSTANT,
+                    input_a: -1,
+                    input_b: -1,
+                    input_c: -1,
+                    seed_offset: 0,
+                    params: [0.25, 0.0, 0.0, 0.0, 0.0, 0.0],
+                },
+                ProgramNode {
+                    opcode: OP_ADD,
+                    input_a: 0,
+                    input_b: 1,
+                    input_c: -1,
+                    seed_offset: 0,
+                    params: [0.0; 6],
+                },
+            ],
+            &[2],
+        )
+    }
+
+    #[test]
+    fn quick_v2_program_lifecycle_is_deterministic() {
+        let bytes = test_program_bytes();
+        let mut handle = 0;
+        assert_eq!(
+            unsafe { rtf_quick_noise_compile_program_v2(bytes.as_ptr(), bytes.len(), &mut handle) },
+            SUCCESS
+        );
+        assert_ne!(handle, 0);
+        assert_eq!(rtf_quick_noise_program_outputs_v2(handle), 1);
+
+        let mut first = vec![0.0; 32 * 32];
+        let mut repeated = vec![0.0; 32 * 32];
+        assert_eq!(
+            unsafe {
+                rtf_quick_noise_fill_program_2d_v2(
+                    handle,
+                    991,
+                    -64,
+                    96,
+                    32,
+                    32,
+                    first.as_mut_ptr(),
+                    first.len(),
+                )
+            },
+            SUCCESS
+        );
+        assert_eq!(
+            unsafe {
+                rtf_quick_noise_fill_program_2d_v2(
+                    handle,
+                    991,
+                    -64,
+                    96,
+                    32,
+                    32,
+                    repeated.as_mut_ptr(),
+                    repeated.len(),
+                )
+            },
+            SUCCESS
+        );
+        assert_eq!(first, repeated);
+        assert!(first.iter().all(|value| value.is_finite()));
+        assert!(first.iter().any(|value| *value != 0.25));
+
+        assert_eq!(rtf_quick_noise_free_program_v2(handle), SUCCESS);
+        assert_eq!(rtf_quick_noise_program_outputs_v2(handle), 0);
+        assert_eq!(rtf_quick_noise_free_program_v2(handle), INVALID_PROGRAM);
+    }
+
+    #[test]
+    fn quick_v2_rejects_invalid_programs() {
+        let mut bytes = test_program_bytes();
+        bytes[PROGRAM_HEADER_BYTES] = 0xFF;
+        let mut handle = 0;
+        assert_eq!(
+            unsafe { rtf_quick_noise_compile_program_v2(bytes.as_ptr(), bytes.len(), &mut handle) },
+            INVALID_PROGRAM
+        );
+        assert_eq!(handle, 0);
+    }
+
+    #[test]
+    fn quick_v2_fixed_grid_overlap_matches() {
+        let program = parse_program(&test_program_bytes()).unwrap();
+        let mut left = vec![0.0; 32 * 32];
+        let mut right = vec![0.0; 32 * 32];
+        fill_program_2d(&program, 72, 0, 0, 32, 32, &mut left).unwrap();
+        fill_program_2d(&program, 72, 16, 0, 32, 32, &mut right).unwrap();
+        for z in 0..32 {
+            for x in 16..32 {
+                assert_eq!(left[z * 32 + x], right[z * 32 + x - 16]);
+            }
+        }
+    }
+
+    #[test]
+    fn quick_v2_program_fills_are_thread_safe() {
+        let program = Arc::new(parse_program(&test_program_bytes()).unwrap());
+        let expected_program = program.clone();
+        let expected = thread::spawn(move || {
+            let mut output = vec![0.0; 48 * 48];
+            fill_program_2d(&expected_program, 123, -24, 48, 48, 48, &mut output).unwrap();
+            output
+        })
+        .join()
+        .unwrap();
+        let workers: Vec<_> = (0..8)
+            .map(|_| {
+                let program = program.clone();
+                thread::spawn(move || {
+                    let mut output = vec![0.0; 48 * 48];
+                    fill_program_2d(&program, 123, -24, 48, 48, 48, &mut output).unwrap();
+                    output
+                })
+            })
+            .collect();
+        for worker in workers {
+            assert_eq!(expected, worker.join().unwrap());
+        }
     }
 
     #[test]

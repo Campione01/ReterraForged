@@ -13,7 +13,7 @@ record Warp(Noise input, Domain domain) implements Noise {
 	).apply(instance, Warp::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return this.input.compute(this.domain.getX(x, z, seed), this.domain.getZ(x, z, seed), seed);
 	}
 

@@ -2,6 +2,9 @@ package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import java.util.function.Function;
 
+import com.mojang.datafixers.util.Pair;
+import com.mojang.serialization.DataResult;
+import com.mojang.serialization.DynamicOps;
 import com.mojang.datafixers.util.Either;
 import com.mojang.serialization.Codec;
 
@@ -18,7 +21,22 @@ import raccoonman.reterraforged.world.worldgen.noise.function.EdgeFunction;
 import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 
 public class Noises {
-    private static final Codec<Noise> CODEC = RTFBuiltInRegistries.NOISE_TYPE.byNameCodec().dispatch(Noise::codec, Function.identity());
+    private static final Codec<Noise> CODEC = new Codec<>() {
+		@Override
+		public <T> DataResult<T> encode(Noise input, DynamicOps<T> ops, T prefix) {
+			return CodecHolder.CODEC.encode(input, ops, prefix);
+		}
+
+		@Override
+		public <T> DataResult<Pair<Noise, T>> decode(DynamicOps<T> ops, T input) {
+			return CodecHolder.CODEC.decode(ops, input);
+		}
+
+		@Override
+		public String toString() {
+			return "LazyNoiseCodec";
+		}
+    };
     public static final float MAX_REASONABLE_NOISE_VALUE = 1000000.0F;
     public static final Codec<Float> NOISE_VALUE_CODEC = Codec.floatRange(-MAX_REASONABLE_NOISE_VALUE, MAX_REASONABLE_NOISE_VALUE);
     public static final Codec<Noise> DIRECT_CODEC = Codec.either(NOISE_VALUE_CODEC, CODEC).xmap(either -> either.map(Noises::constant, Function.identity()), noise -> {
@@ -412,11 +430,15 @@ public class Noises {
 	private static void register(String name, MapCodec<? extends Noise> value) {
 		RegistryUtil.register(RTFBuiltInRegistries.NOISE_TYPE, name, value);
 	}
+
+	private static final class CodecHolder {
+		private static final Codec<Noise> CODEC = RTFBuiltInRegistries.NOISE_TYPE.byNameCodec().dispatch(Noise::codec, Function.identity());
+	}
 	
 	public record HolderHolder(Holder<Noise> holder) implements Noise {
 		
 		@Override
-		public float compute(float x, float z, int seed) {
+		public float computeLegacy(float x, float z, int seed) {
 			return this.holder.value().compute(x, z, seed);
 		}
 

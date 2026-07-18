@@ -16,7 +16,7 @@ public record Cache2d(Noise noise, ThreadLocal<Cached> cache) implements Noise {
 	}
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return this.cache.get().compute(x, z, seed);
 	}
 
@@ -55,7 +55,7 @@ public record Cache2d(Noise noise, ThreadLocal<Cached> cache) implements Noise {
 		}
 		
 		@Override
-		public float compute(float x, float z, int seed) {
+		public float computeLegacy(float x, float z, int seed) {
 			long newPos = PosUtil.packf(x, z);
 			if(this.lastPos != newPos) {
 				this.value = this.noise.compute(x, z, seed);

@@ -19,9 +19,13 @@ public record Terrace(Noise input, Noise ramp, Noise cliff, Noise rampHeight, fl
 	public Terrace(Noise input, Noise ramp, Noise cliff, Noise rampHeight, float blendRange, int steps) {
 		this(input, ramp, cliff, rampHeight, blendRange, createSteps(input, blendRange, steps));
 	}
+
+	public int stepCount() {
+		return this.steps.length;
+	}
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
         float input = NoiseUtil.clamp(this.input.compute(x, z, seed), 0.0F, 0.999999F);
         int index = NoiseUtil.floor(input * this.steps.length);
         Step step = this.steps[index];

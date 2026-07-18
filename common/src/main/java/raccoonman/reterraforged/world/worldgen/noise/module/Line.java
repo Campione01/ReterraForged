@@ -27,7 +27,7 @@ public record Line(float x1, float z1, float x2, float z2, Noise radiusSq, Noise
 	}
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float widthModifier = this.getWidthModifier(x, z, seed);
 		float dist2 = this.getDistanceSq(x, z);
         float radius2 = this.radiusSq.compute(x, z, seed) * widthModifier;

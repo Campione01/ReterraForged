@@ -12,7 +12,7 @@ public record White(float frequency) implements Noise {
 	).apply(instance, White::new));
 
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
         x *= this.frequency;
         z *= this.frequency;
         float value = sample(x, z, seed);

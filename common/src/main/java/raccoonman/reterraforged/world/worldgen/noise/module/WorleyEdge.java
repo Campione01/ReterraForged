@@ -17,7 +17,7 @@ record WorleyEdge(float frequency, float distance, EdgeFunction edgeFunction, Di
 	).apply(instance, WorleyEdge::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
         x *= this.frequency;
         z *= this.frequency;
         float value = sample(x, z, seed, this.distance, this.edgeFunction, this.distanceFunction);

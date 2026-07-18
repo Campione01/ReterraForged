@@ -17,7 +17,7 @@ license="MIT"
     logoFile="logo.png"
     displayURL="https://github.com/Campione01/ReterraForged"
     issueTrackerURL="https://github.com/Campione01/ReterraForged/issues"
-    description="Terrain generation for Minecraft 1.21.1 with configurable archipelagos, island mountains, coast and biome fixes, plus the optional QUICK_V1 native/OpenCL cave-density backend. QUICK_V1 uses Alysara/quick-noise (MIT/Apache-2.0); its batching and compatibility architecture was informed by FastFlow (PG 2024), C2ME, and the Khronos OpenCL 1.2 specification. Required notices are bundled."
+    description="Terrain generation for Minecraft 1.21.1 with configurable archipelagos, island mountains, coast and biome fixes. QUICK_V2 uses Alysara/quick-noise (MIT/Apache-2.0) for native batched 2D terrain fields; QUICK_V1 provides native CPU and optional OpenCL cave density. Compatibility architecture was informed by FastFlow (PG 2024), C2ME, and the Khronos OpenCL 1.2 specification. Required notices are bundled."
 
 [[dependencies.reterraforged]]
     modId="neoforge"

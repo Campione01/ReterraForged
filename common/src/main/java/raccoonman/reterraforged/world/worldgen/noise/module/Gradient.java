@@ -15,7 +15,7 @@ record Gradient(Noise input, Noise lower, Noise upper, Noise strength) implement
 	).apply(instance, Gradient::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float noiseValue = this.input.compute(x, z, seed);
         float upperBound = this.upper.compute(x, z, seed);
         if (noiseValue > upperBound) {

@@ -11,7 +11,7 @@ record Multiply(Noise input1, Noise input2) implements Noise {
 	).apply(instance, Multiply::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float input1 = this.input1.compute(x, z, seed);
 		return input1 != 0.0F ? input1 * this.input2.compute(x, z, seed) : 0.0F;
 	}

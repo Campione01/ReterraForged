@@ -13,7 +13,7 @@ record Curve(Noise input, CurveFunction curveFunction) implements Noise {
 	).apply(instance, Curve::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return this.curveFunction.apply(this.input.compute(x, z, seed));
 	}
 

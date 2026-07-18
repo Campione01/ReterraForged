@@ -13,7 +13,7 @@ record Power(Noise input, float power) implements Noise {
 	).apply(instance, Power::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return NoiseUtil.pow(this.input.compute(x, z, seed), this.power);
 	}
 

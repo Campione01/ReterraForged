@@ -25,7 +25,7 @@ public record Simplex(float frequency, int octaves, float lacunarity, float gain
     }
     
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
         x *= this.frequency;
         z *= this.frequency;
         float sum = 0.0F;

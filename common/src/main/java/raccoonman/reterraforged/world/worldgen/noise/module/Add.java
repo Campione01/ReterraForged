@@ -11,7 +11,7 @@ record Add(Noise input1, Noise input2) implements Noise {
 	).apply(instance, Add::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return this.input1.compute(x, z, seed) + this.input2.compute(x, z, seed);
 	}
 

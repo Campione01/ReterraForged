@@ -14,7 +14,7 @@ record Clamp(Noise input, Noise min, Noise max) implements Noise {
 	).apply(instance, Clamp::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return NoiseUtil.clamp(this.input.compute(x, z, seed), this.min.compute(x, z, seed), this.max.compute(x, z, seed));
 	}
 

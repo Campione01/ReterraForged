@@ -17,7 +17,13 @@ public interface Noise {
         return new Holder.Direct<>(noise);
     });
     
-	float compute(float x, float z, int seed);
+	default float compute(float x, float z, int seed) {
+		return QuickNoiseRuntime.compute(this, x, z, seed);
+	}
+
+	default float computeLegacy(float x, float z, int seed) {
+		throw new UnsupportedOperationException("Noise implementation must override compute or computeLegacy");
+	}
 	
 	float minValue();
 	
