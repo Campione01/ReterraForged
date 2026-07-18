@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "id": "reterraforged",
+  "version": "${version}",
+  "name": "ReTerraForged",
+  "description": "Terrain generation for Minecraft 1.21.1 with configurable archipelagos, island mountains and volcanoes, adjustable island coasts and beaches, and corrected island biome routing.",
+  "authors": [
+	"dags",
+	"Won-Ton",
+	"racconman"
+  ],
+  "contact": {
+    "repo": "https://github.com/Campione01/ReterraForged",
+    "issues": "https://github.com/Campione01/ReterraForged/issues"
+  },
+  "license": "MIT",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "raccoonman.reterraforged.fabric.RTFFabric"
+    ],
+    "fabric-datagen": [
+      "raccoonman.reterraforged.fabric.RTFFabric"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.14.14",
+    "fabric": ">=0.86.1",
+    "minecraft": ">=1.20.1"
+  },
+  "mixins": [
+    "reterraforged-common.mixins.json",
+    "reterraforged-fabric.mixins.json"
+  ],
+  "icon": "assets/reterraforged/icon.png"
+}
