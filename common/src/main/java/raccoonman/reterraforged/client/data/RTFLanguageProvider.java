@@ -57,6 +57,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_BUTTON_SPAWN_TYPE, "Spawn Type");
 			this.add(RTFTranslationKeys.GUI_BUTTON_LARGE_ORE_VEINS, "Large Ore Veins");
 			this.add(RTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION, "Legacy Carver Distribution");
+			this.add(RTFTranslationKeys.GUI_BUTTON_CAVE_DENSITY_ALGORITHM, "3D Density Algorithm");
 			this.add(RTFTranslationKeys.GUI_BUTTON_CAVE_COMPATIBILITY_MODE, "Cave Compatibility");
 			this.add(RTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET, "Seed Offset");
 			this.add(RTFTranslationKeys.GUI_BUTTON_BIOME_EDGE_TYPE, "Type");
@@ -83,6 +84,8 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_VALUE_CAVE_COMPATIBILITY_MODE + ".auto", "Auto");
 			this.add(RTFTranslationKeys.GUI_VALUE_CAVE_COMPATIBILITY_MODE + ".rtf", "RTF");
 			this.add(RTFTranslationKeys.GUI_VALUE_CAVE_COMPATIBILITY_MODE + ".vanilla", "Vanilla");
+			this.add(RTFTranslationKeys.GUI_VALUE_CAVE_DENSITY_ALGORITHM + ".quick_v1", "Quick V1");
+			this.add(RTFTranslationKeys.GUI_VALUE_CAVE_DENSITY_ALGORITHM + ".legacy", "Legacy");
 
 			this.add(RTFTranslationKeys.GUI_SLIDER_ZOOM, "Zoom");
 			this.add(RTFTranslationKeys.GUI_SLIDER_CONTINENT_SCALE, "Continent Scale");
@@ -233,6 +236,7 @@ public final class RTFLanguageProvider {
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_SPAWN_TYPE), "Set whether spawn should be close to x=0,z=0 or the centre of the nearest continent");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_LARGE_ORE_VEINS), "Set whether large ore veins spawn");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION), "Set whether carvers use 1.16 distribution");
+			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_CAVE_DENSITY_ALGORITHM), "QUICK_V1 uses the versioned quick-noise 3D cave density algorithm for new worlds. LEGACY keeps the previous density graph.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_CAVE_COMPATIBILITY_MODE), "AUTO keeps RTF behavior unless a known cave-biome compatibility target is loaded. RTF forces RTF cave climate and carvers. VANILLA preserves vanilla carvers and external cave-biome climate depth.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_CLIMATE_SEED_OFFSET), "A seed offset used to randomise climate distribution");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_BIOME_EDGE_TYPE), "The noise type");

@@ -1,0 +1,4 @@
+Component: org.lwjgl:lwjgl-opencl:3.3.3
+Source: https://github.com/LWJGL/lwjgl3/tree/3.3.3
+License: BSD-3-Clause
+Copyright: Copyright (c) 2012-present Lightweight Java Game Library. All rights reserved.

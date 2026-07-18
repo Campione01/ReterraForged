@@ -1,0 +1,6 @@
+quick-noise
+Source: https://github.com/Alysara/quick-noise
+Revision: baae360ff02626b58ff56c7bd46087d024fa8407
+License: MIT OR Apache-2.0
+
+ReTerraForged links quick-noise into the optional native QUICK_V1 density backend.

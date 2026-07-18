@@ -112,6 +112,8 @@ gradle-app.setting
 
 **/build/
 
+native/target/
+
 **/src/generated/
 **/src/main/generated/
 
