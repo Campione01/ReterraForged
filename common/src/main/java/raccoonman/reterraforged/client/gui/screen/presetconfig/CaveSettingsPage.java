@@ -25,6 +25,7 @@ public class CaveSettingsPage extends PresetEditorPage {
 	private Slider ravineProbability;
 	private CycleButton<Boolean> largeOreVeins;
 	private CycleButton<Boolean> legacyCarverDistribution;
+	private CycleButton<CaveSettings.DensityAlgorithm> densityAlgorithm;
 	private CycleButton<CaveSettings.CompatibilityMode> compatibilityMode;
 	
 	public CaveSettingsPage(PresetConfigScreen screen, PresetEntry preset) {
@@ -81,6 +82,13 @@ public class CaveSettingsPage extends PresetEditorPage {
 		this.legacyCarverDistribution = PresetWidgets.createToggle(caves.legacyCarverDistribution, RTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION, (button, value) -> {
 			caves.legacyCarverDistribution = value;
 		});
+		this.densityAlgorithm = CycleButton.<CaveSettings.DensityAlgorithm>builder(CaveSettingsPage::densityAlgorithmName)
+			.withInitialValue(caves.densityAlgorithm)
+			.withValues(Arrays.asList(CaveSettings.DensityAlgorithm.values()))
+			.create(-1, -1, -1, -1, Component.translatable(RTFTranslationKeys.GUI_BUTTON_CAVE_DENSITY_ALGORITHM), (button, value) -> {
+				caves.densityAlgorithm = value;
+			});
+		this.densityAlgorithm.setTooltip(Tooltips.create(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_CAVE_DENSITY_ALGORITHM)));
 		this.compatibilityMode = CycleButton.<CaveSettings.CompatibilityMode>builder(CaveSettingsPage::compatibilityModeName)
 			.withInitialValue(caves.compatibilityMode)
 			.withValues(Arrays.asList(CaveSettings.CompatibilityMode.values()))
@@ -90,6 +98,7 @@ public class CaveSettingsPage extends PresetEditorPage {
 		this.compatibilityMode.setTooltip(Tooltips.create(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_CAVE_COMPATIBILITY_MODE)));
 
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_NOISE_CAVES));
+		this.left.addWidget(this.densityAlgorithm);
 		this.left.addWidget(this.entranceCaveProbability);
 		this.left.addWidget(this.cheeseCaveDepthOffset);
 		this.left.addWidget(this.cheeseCaveProbability);
@@ -107,6 +116,10 @@ public class CaveSettingsPage extends PresetEditorPage {
 
 	private static Component compatibilityModeName(CaveSettings.CompatibilityMode mode) {
 		return Component.translatable(RTFTranslationKeys.GUI_VALUE_CAVE_COMPATIBILITY_MODE + "." + mode.getSerializedName().toLowerCase(Locale.ROOT));
+	}
+
+	private static Component densityAlgorithmName(CaveSettings.DensityAlgorithm algorithm) {
+		return Component.translatable(RTFTranslationKeys.GUI_VALUE_CAVE_DENSITY_ALGORITHM + "." + algorithm.getSerializedName().toLowerCase(Locale.ROOT));
 	}
 	
 	@Override

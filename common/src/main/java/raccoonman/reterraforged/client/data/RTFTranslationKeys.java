@@ -45,6 +45,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_SPAWN_TYPE = resolve("gui.button.spawnType");
 	public static final String GUI_BUTTON_LARGE_ORE_VEINS = resolve("gui.button.largeOreVeins");
 	public static final String GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION = resolve("gui.button.legacyCarverDistribution");
+	public static final String GUI_BUTTON_CAVE_DENSITY_ALGORITHM = resolve("gui.button.caveDensityAlgorithm");
 	public static final String GUI_BUTTON_CAVE_COMPATIBILITY_MODE = resolve("gui.button.caveCompatibilityMode");
 	public static final String GUI_BUTTON_CLIMATE_SEED_OFFSET = resolve("gui.button.climateSeedOffset");
 	public static final String GUI_BUTTON_BIOME_EDGE_TYPE = resolve("gui.button.biomeEdgeType");
@@ -69,6 +70,7 @@ public final class RTFTranslationKeys {
 	public static final String GUI_BUTTON_STEPPE_FAKE_RIVERS = resolve("gui.button.steppeFakeRivers");
 	public static final String GUI_BUTTON_BADLANDS_FAKE_OCEANS = resolve("gui.button.badlandsFakeOceans");
 	public static final String GUI_VALUE_CAVE_COMPATIBILITY_MODE = resolve("gui.value.caveCompatibilityMode");
+	public static final String GUI_VALUE_CAVE_DENSITY_ALGORITHM = resolve("gui.value.caveDensityAlgorithm");
 	
 	public static final String GUI_SLIDER_ZOOM = resolve("gui.slider.zoom");
 	public static final String GUI_SLIDER_CONTINENT_SCALE = resolve("gui.slider.continentScale");

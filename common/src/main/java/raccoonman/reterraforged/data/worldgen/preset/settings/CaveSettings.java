@@ -17,6 +17,7 @@ public class CaveSettings {
 		Codec.FLOAT.fieldOf("ravineCarverProbability").forGetter((o) -> o.ravineCarverProbability),
 		Codec.BOOL.fieldOf("largeOreVeins").forGetter((o) -> o.largeOreVeins),
 		Codec.BOOL.fieldOf("legacyCarverDistribution").forGetter((o) -> o.legacyCarverDistribution),
+		DensityAlgorithm.CODEC.optionalFieldOf("densityAlgorithm", DensityAlgorithm.QUICK_V1).forGetter((o) -> o.densityAlgorithm),
 		CompatibilityMode.CODEC.optionalFieldOf("compatibilityMode", CompatibilityMode.AUTO).forGetter((o) -> o.compatibilityMode)
 	).apply(instance, CaveSettings::new));
 
@@ -30,16 +31,21 @@ public class CaveSettings {
 	public float ravineCarverProbability;
 	public boolean largeOreVeins;
 	public boolean legacyCarverDistribution;
+	public DensityAlgorithm densityAlgorithm;
 	public CompatibilityMode compatibilityMode;
 	
 	//TODO
 	public boolean minCaveBiomeDepth;
 
 	public CaveSettings(float entranceCaveProbability, float cheeseCaveDepthOffset, float cheeseCaveProbability, float spaghettiCaveProbability, float noodleCaveProbability, float caveCarverProbability, float deepCaveCarverProbability, float ravineProbability, boolean largeOreVeins, boolean legacyCarverDistribution) {
-		this(entranceCaveProbability, cheeseCaveDepthOffset, cheeseCaveProbability, spaghettiCaveProbability, noodleCaveProbability, caveCarverProbability, deepCaveCarverProbability, ravineProbability, largeOreVeins, legacyCarverDistribution, CompatibilityMode.AUTO);
+		this(entranceCaveProbability, cheeseCaveDepthOffset, cheeseCaveProbability, spaghettiCaveProbability, noodleCaveProbability, caveCarverProbability, deepCaveCarverProbability, ravineProbability, largeOreVeins, legacyCarverDistribution, DensityAlgorithm.QUICK_V1, CompatibilityMode.AUTO);
 	}
 
 	public CaveSettings(float entranceCaveProbability, float cheeseCaveDepthOffset, float cheeseCaveProbability, float spaghettiCaveProbability, float noodleCaveProbability, float caveCarverProbability, float deepCaveCarverProbability, float ravineProbability, boolean largeOreVeins, boolean legacyCarverDistribution, CompatibilityMode compatibilityMode) {
+		this(entranceCaveProbability, cheeseCaveDepthOffset, cheeseCaveProbability, spaghettiCaveProbability, noodleCaveProbability, caveCarverProbability, deepCaveCarverProbability, ravineProbability, largeOreVeins, legacyCarverDistribution, DensityAlgorithm.QUICK_V1, compatibilityMode);
+	}
+
+	public CaveSettings(float entranceCaveProbability, float cheeseCaveDepthOffset, float cheeseCaveProbability, float spaghettiCaveProbability, float noodleCaveProbability, float caveCarverProbability, float deepCaveCarverProbability, float ravineProbability, boolean largeOreVeins, boolean legacyCarverDistribution, DensityAlgorithm densityAlgorithm, CompatibilityMode compatibilityMode) {
 		this.entranceCaveProbability = entranceCaveProbability;
 		this.cheeseCaveDepthOffset = cheeseCaveDepthOffset;
 		this.cheeseCaveProbability = cheeseCaveProbability;
@@ -50,11 +56,30 @@ public class CaveSettings {
 		this.ravineCarverProbability = ravineProbability;
 		this.largeOreVeins = largeOreVeins;
 		this.legacyCarverDistribution = legacyCarverDistribution;
+		this.densityAlgorithm = densityAlgorithm != null ? densityAlgorithm : DensityAlgorithm.QUICK_V1;
 		this.compatibilityMode = compatibilityMode != null ? compatibilityMode : CompatibilityMode.AUTO;
 	}
 	
 	public CaveSettings copy() {
-		return new CaveSettings(this.entranceCaveProbability, this.cheeseCaveDepthOffset, this.cheeseCaveProbability, this.spaghettiCaveProbability, this.noodleCaveProbability, this.caveCarverProbability, this.deepCaveCarverProbability, this.ravineCarverProbability, this.largeOreVeins, this.legacyCarverDistribution, this.compatibilityMode);
+		return new CaveSettings(this.entranceCaveProbability, this.cheeseCaveDepthOffset, this.cheeseCaveProbability, this.spaghettiCaveProbability, this.noodleCaveProbability, this.caveCarverProbability, this.deepCaveCarverProbability, this.ravineCarverProbability, this.largeOreVeins, this.legacyCarverDistribution, this.densityAlgorithm, this.compatibilityMode);
+	}
+
+	public enum DensityAlgorithm implements StringRepresentable {
+		QUICK_V1("QUICK_V1"),
+		LEGACY("LEGACY");
+
+		public static final Codec<DensityAlgorithm> CODEC = StringRepresentable.fromEnum(DensityAlgorithm::values);
+
+		private final String name;
+
+		DensityAlgorithm(String name) {
+			this.name = name;
+		}
+
+		@Override
+		public String getSerializedName() {
+			return this.name;
+		}
 	}
 
 	public enum CompatibilityMode implements StringRepresentable {

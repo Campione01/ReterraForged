@@ -36,6 +36,9 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
+import raccoonman.reterraforged.world.worldgen.opencl.OpenClDensityFunctions;
+import raccoonman.reterraforged.world.worldgen.opencl.OpenClManager;
+import raccoonman.reterraforged.world.worldgen.quicknoise.QuickCaveDensity;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 
@@ -56,6 +59,8 @@ class MixinRandomState {
 	private GeneratorContext generatorContext;
 	@Nullable
 	private Preset preset;
+	@Nullable
+	private DensityFunction openClFinalDensity;
 	
 	private long seed;
 	private NoiseGeneratorSettings noiseGeneratorSettings;
@@ -75,6 +80,9 @@ class MixinRandomState {
 			
 			@Override
 			public DensityFunction apply(DensityFunction function) {
+				if(function instanceof QuickCaveDensity.Marker marker) {
+					return marker.seeded(seed);
+				}
 				if(function instanceof NoiseFunction.Marker marker) {
 					return new NoiseFunction(marker.noise(), (int) seed);
 				}
@@ -93,7 +101,11 @@ class MixinRandomState {
 	            return visitor.visitNoise(noiseHolder);
 	        }
 		};
-		return router.mapAll(this.densityFunctionWrapper);
+		NoiseRouter mapped = router.mapAll(this.densityFunctionWrapper);
+		if(this.hasContext) {
+			this.openClFinalDensity = OpenClDensityFunctions.wrapFinalDensity(mapped.finalDensity());
+		}
+		return mapped;
 	}
 
 	public void reterraforged$RTFRandomState$initialize(ServerLevel level) {
@@ -133,6 +145,9 @@ class MixinRandomState {
 //				throw new IllegalStateException("Missing preset!");
 			}
 		});
+		if(this.generatorContext != null && this.openClFinalDensity != null) {
+			OpenClManager.initialize();
+		}
 	}
 	
 	@Nullable
@@ -143,6 +158,11 @@ class MixinRandomState {
 	@Nullable
 	public GeneratorContext reterraforged$RTFRandomState$generatorContext() {
 		return this.generatorContext;
+	}
+
+	@Nullable
+	public DensityFunction reterraforged$RTFRandomState$openClFinalDensity() {
+		return this.openClFinalDensity;
 	}
 
 	@Nullable
@@ -158,5 +178,6 @@ class MixinRandomState {
 		this.hasContext = false;
 		this.generatorContext = null;
 		this.preset = null;
+		this.openClFinalDensity = null;
 	}
 }

@@ -22,12 +22,34 @@ accessible field net/minecraft/world/level/levelgen/SurfaceRules$Context biome L
 accessible field net/minecraft/world/level/levelgen/SurfaceSystem seaLevel I
 accessible field net/minecraft/world/level/levelgen/NoiseChunk initialDensityNoJaggedness Lnet/minecraft/world/level/levelgen/DensityFunction;
 accessible field net/minecraft/world/level/levelgen/DensityFunctions MAX_REASONABLE_NOISE_VALUE D
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$Clamp
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$Constant
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$Mapped
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$Mapped$Type
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$Marker
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$Marker$Type
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$Noise
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$RangeChoice
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$TwoArgumentSimpleFunction
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$YClampedGradient
+accessible field net/minecraft/world/level/levelgen/synth/NormalNoise first Lnet/minecraft/world/level/levelgen/synth/PerlinNoise;
+accessible field net/minecraft/world/level/levelgen/synth/NormalNoise second Lnet/minecraft/world/level/levelgen/synth/PerlinNoise;
+accessible field net/minecraft/world/level/levelgen/synth/NormalNoise valueFactor D
+accessible field net/minecraft/world/level/levelgen/synth/PerlinNoise noiseLevels [Lnet/minecraft/world/level/levelgen/synth/ImprovedNoise;
+accessible field net/minecraft/world/level/levelgen/synth/PerlinNoise amplitudes Lit/unimi/dsi/fastutil/doubles/DoubleList;
+accessible field net/minecraft/world/level/levelgen/synth/PerlinNoise lowestFreqValueFactor D
+accessible field net/minecraft/world/level/levelgen/synth/PerlinNoise lowestFreqInputFactor D
+accessible field net/minecraft/world/level/levelgen/synth/ImprovedNoise p [B
 accessible class net/minecraft/world/level/levelgen/OreVeinifier$VeinType
 accessible field net/minecraft/world/level/levelgen/OreVeinifier$VeinType minY I
 accessible field net/minecraft/world/level/levelgen/OreVeinifier$VeinType maxY I
 accessible class net/minecraft/world/level/levelgen/DensityFunctions$WeirdScaledSampler
 accessible class net/minecraft/world/level/levelgen/DensityFunctions$BeardifierMarker
 accessible class net/minecraft/world/level/levelgen/DensityFunctions$WeirdScaledSampler$RarityValueMapper
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$Shift
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$ShiftA
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$ShiftB
+accessible class net/minecraft/world/level/levelgen/DensityFunctions$ShiftedNoise
 accessible field net/minecraft/client/gui/components/AbstractWidget height I
 accessible method net/minecraft/client/gui/components/AbstractSelectionList replaceEntries (Ljava/util/Collection;)V
 accessible field net/minecraft/client/gui/screens/Screen minecraft Lnet/minecraft/client/Minecraft;

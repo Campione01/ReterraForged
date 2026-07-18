@@ -1,0 +1,13 @@
+[package]
+name = "reterraforged-quick-noise"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+quick-noise = { git = "https://github.com/Alysara/quick-noise.git", rev = "baae360ff02626b58ff56c7bd46087d024fa8407" }

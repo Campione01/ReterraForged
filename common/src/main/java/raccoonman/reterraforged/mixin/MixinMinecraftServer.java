@@ -16,9 +16,15 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
+import raccoonman.reterraforged.world.worldgen.opencl.OpenClManager;
 
 @Mixin(MinecraftServer.class)
 class MixinMinecraftServer {
+
+	@Inject(at = @At("TAIL"), method = "stopServer")
+	private void closeOpenCl(CallbackInfo callback) {
+		OpenClManager.close();
+	}
 
 	@Inject(
 		at = @At(
