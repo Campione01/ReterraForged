@@ -13,7 +13,7 @@ public record LegacyMoisture(Noise source, int power) implements Noise {
 	).apply(instance, LegacyMoisture::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
         float noise = this.source.compute(x, z, seed);
         if (this.power < 2) {
             return noise;

@@ -1,0 +1,83 @@
+package raccoonman.reterraforged.world.worldgen.noise.module;
+
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.Test;
+
+class QuickNoisePerformanceTest {
+	private static volatile float sink;
+
+	@Test
+	void quickV2RepresentativeGraphIsAtLeastOnePointFiveTimesFaster() {
+		Assumptions.assumeTrue("1".equals(System.getenv("RTF_QUICK_V2_BENCHMARK")));
+		Noise source = Noises.perlin(17, 480, 4);
+		Noise gradient = Noises.gradient(source, 0.0F, 0.6F, 0.45F);
+		Noise terrace = Noises.terrace(gradient, 0.9F, 0.15F, 0.35F, 0.4F, 6);
+		Noise graph = Noises.advancedTerrace(terrace, 0.04F, 0.8F, 0.6F, 0.1F, 0.45F, 12, 2);
+
+		for(int index = 0; index < 3; index++) {
+			sampleLegacy(graph, 2);
+			try(QuickNoiseRuntime.Engine engine = new QuickNoiseRuntime.Engine(); QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(engine)) {
+				sampleQuick(graph, 2);
+			}
+		}
+
+		long legacyStart = System.nanoTime();
+		float legacy = sampleLegacy(graph, 8);
+		long legacyNanos = System.nanoTime() - legacyStart;
+		float quick;
+		try(QuickNoiseRuntime.Engine engine = new QuickNoiseRuntime.Engine(); QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(engine)) {
+			QuickNoiseRuntime.prepareSample(4096, -4096);
+			graph.compute(4096.0F, -4096.0F, 0);
+			long quickStart = System.nanoTime();
+			quick = sampleQuick(graph, 8);
+			long quickNanos = System.nanoTime() - quickStart;
+			sink = legacy + quick;
+			double speedup = (double) legacyNanos / quickNanos;
+			System.out.printf("RTF_QUICK_V2_BENCH legacy_ms=%.3f quick_ms=%.3f speedup=%.3fx sink=%f%n", legacyNanos / 1_000_000.0D, quickNanos / 1_000_000.0D, speedup, sink);
+			assertTrue(speedup >= 1.5D, () -> "QUICK_V2 speedup was only " + speedup + "x");
+		}
+	}
+
+	private static float sampleLegacy(Noise noise, int regions) {
+		float sum = 0.0F;
+		for(int region = 0; region < regions; region++) {
+			int originX = region * 256 - 512;
+			int originZ = region * -256 + 256;
+			for(int chunkZ = 0; chunkZ < 8; chunkZ++) {
+				for(int chunkX = 0; chunkX < 8; chunkX++) {
+					for(int dz = 0; dz < 16; dz++) {
+						for(int dx = 0; dx < 16; dx++) {
+							int x = originX + chunkX * 16 + dx;
+							int z = originZ + chunkZ * 16 + dz;
+							sum += noise.computeLegacy(x, z, 0);
+						}
+					}
+				}
+			}
+		}
+		return sum;
+	}
+
+	private static float sampleQuick(Noise noise, int regions) {
+		float sum = 0.0F;
+		for(int region = 0; region < regions; region++) {
+			int originX = region * 256 - 512;
+			int originZ = region * -256 + 256;
+			for(int chunkZ = 0; chunkZ < 8; chunkZ++) {
+				for(int chunkX = 0; chunkX < 8; chunkX++) {
+					for(int dz = 0; dz < 16; dz++) {
+						for(int dx = 0; dx < 16; dx++) {
+							int x = originX + chunkX * 16 + dx;
+							int z = originZ + chunkZ * 16 + dz;
+							QuickNoiseRuntime.prepareSample(x, z);
+							sum += noise.compute(x, z, 0);
+						}
+					}
+				}
+			}
+		}
+		return sum;
+	}
+}

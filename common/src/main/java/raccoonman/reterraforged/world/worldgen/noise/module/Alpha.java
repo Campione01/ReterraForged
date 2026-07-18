@@ -11,7 +11,7 @@ record Alpha(Noise input, Noise alpha) implements Noise {
 	).apply(instance, Alpha::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float input = this.input.compute(x, z, seed);
 		float alpha = this.alpha.compute(x, z, seed);
 		return input * alpha + (1.0F - alpha);

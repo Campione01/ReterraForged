@@ -12,7 +12,7 @@ record Map(Noise alpha, Noise from, Noise to) implements Noise {
 	).apply(instance, Map::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float alphaMin = this.alpha.minValue();
 		float alphaMax = this.alpha.maxValue();
 		

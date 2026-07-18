@@ -155,13 +155,13 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
 				.resultOrPartial(RTFCommon.LOGGER::error)
 				.orElseGet(PerformanceConfig::makeDefault);
-	        GeneratorContext generatorContext = GeneratorContext.makeUncached(preset, noises, (int) settings.options().seed(), FACTOR, 0, config.batchCount());
-	        
-	        // Ignore continent center snapping, use offset directly
-	        this.centerX = this.offsetX;
-	        this.centerZ = this.offsetZ;
+	        try(GeneratorContext generatorContext = GeneratorContext.makeUncached(preset, noises, (int) settings.options().seed(), FACTOR, 0, config.batchCount())) {
+	            // Ignore continent center snapping, use offset directly
+	            this.centerX = this.offsetX;
+	            this.centerZ = this.offsetZ;
 
-	        this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
+	            this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
+	        }
 	        RenderMode renderMode = PresetEditorPage.this.renderMode.getValue();
 	        Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
 

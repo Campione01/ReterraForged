@@ -13,7 +13,7 @@ public record LegacyTemperature(float frequency, int power) implements Noise {
 	).apply(instance, LegacyTemperature::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		z *= this.frequency;
 		float sin = NoiseUtil.sin(z);
 		sin = NoiseUtil.clamp(sin, -1.0F, 1.0F);

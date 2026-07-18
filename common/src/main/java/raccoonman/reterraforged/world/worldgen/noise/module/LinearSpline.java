@@ -27,7 +27,7 @@ public record LinearSpline(Noise input, List<Pair<Float, Noise>> points, float m
 	}
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float input = this.input.compute(x, z, seed);
 		
 		int pointCount = this.points.size();

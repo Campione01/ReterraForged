@@ -3,29 +3,54 @@ package raccoonman.reterraforged.data.worldgen.preset.settings;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
+import net.minecraft.util.StringRepresentable;
 import raccoonman.reterraforged.world.worldgen.cell.continent.IslandPopulator;
 import raccoonman.reterraforged.world.worldgen.noise.function.DistanceFunction;
 
 public class WorldSettings {
 	public static final Codec<WorldSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+		NoiseEngine.CODEC.optionalFieldOf("noiseEngine", NoiseEngine.QUICK_V2).forGetter((o) -> o.noiseEngine),
 		Continent.CODEC.fieldOf("continent").forGetter((o) -> o.continent),
 		ControlPoints.CODEC.fieldOf("controlPoints").forGetter((o) -> o.controlPoints),
 		Properties.CODEC.fieldOf("properties").forGetter((o) -> o.properties)
 	).apply(instance, WorldSettings::new));
 	
+	public NoiseEngine noiseEngine;
     public Continent continent;
     public ControlPoints controlPoints;
     public Properties properties;
     
     public WorldSettings(Continent continent, ControlPoints controlPoints, Properties properties) {
+		this(NoiseEngine.QUICK_V2, continent, controlPoints, properties);
+	}
+
+	public WorldSettings(NoiseEngine noiseEngine, Continent continent, ControlPoints controlPoints, Properties properties) {
+		this.noiseEngine = noiseEngine != null ? noiseEngine : NoiseEngine.QUICK_V2;
         this.continent = continent;
         this.controlPoints = controlPoints;
         this.properties = properties;
     }
     
     public WorldSettings copy() {
-    	return new WorldSettings(this.continent.copy(), this.controlPoints.copy(), this.properties.copy());
+		return new WorldSettings(this.noiseEngine, this.continent.copy(), this.controlPoints.copy(), this.properties.copy());
     }
+
+	public enum NoiseEngine implements StringRepresentable {
+		QUICK_V2("quick_v2"),
+		LEGACY("legacy");
+
+		public static final Codec<NoiseEngine> CODEC = StringRepresentable.fromEnum(NoiseEngine::values);
+		private final String name;
+
+		NoiseEngine(String name) {
+			this.name = name;
+		}
+
+		@Override
+		public String getSerializedName() {
+			return this.name;
+		}
+	}
     
     public static class Continent {
     	public static final Codec<Continent> CODEC = RecordCodecBuilder.create(instance -> instance.group(

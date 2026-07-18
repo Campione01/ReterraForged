@@ -175,6 +175,9 @@ class MixinRandomState {
 	}
 
 	private void clearGeneratorContext() {
+		if(this.generatorContext != null) {
+			this.generatorContext.close();
+		}
 		this.hasContext = false;
 		this.generatorContext = null;
 		this.preset = null;

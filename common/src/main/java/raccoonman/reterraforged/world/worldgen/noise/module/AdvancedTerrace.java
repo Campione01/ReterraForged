@@ -19,7 +19,7 @@ record AdvancedTerrace(Noise source, Noise modulation, Noise mask, Noise slope, 
 	).apply(instance, AdvancedTerrace::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float value = this.source.compute(x, z, seed);
         if (value <= this.blendMin) {
             return value;

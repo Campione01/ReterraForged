@@ -11,7 +11,7 @@ public record Max(Noise input1, Noise input2) implements Noise {
 	).apply(instance, Max::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return Math.max(this.input1.compute(x, z, seed), this.input2.compute(x, z, seed));
 	}
 

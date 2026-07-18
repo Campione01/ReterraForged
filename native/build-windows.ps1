@@ -37,24 +37,31 @@ function Build-Package {
     }
 }
 
-Build-Package 'reterraforged-quick-noise-dispatch' (Join-Path $targetRoot 'dispatch') ''
-Copy-Item -Force -LiteralPath (Join-Path $targetRoot 'dispatch\release\reterraforged_quick_noise_dispatch.dll') -Destination $OutputDirectory
+Push-Location $PSScriptRoot
+try {
+    Build-Package 'reterraforged-quick-noise-dispatch' (Join-Path $targetRoot 'dispatch') ''
+    Copy-Item -Force -LiteralPath (Join-Path $targetRoot 'dispatch\release\reterraforged_quick_noise_dispatch.dll') -Destination $OutputDirectory
 
-$variants = @(
-    @{ Name = 'scalar'; Flags = '' },
-    @{ Name = 'avx2'; Flags = '-C target-feature=+avx2,+fma' }
-)
-foreach ($variant in $variants) {
-    $targetDirectory = Join-Path $targetRoot $variant.Name
-    Build-Package 'reterraforged-quick-noise' $targetDirectory $variant.Flags
-    $source = Join-Path $targetDirectory 'release\reterraforged_quick_noise.dll'
-    $destination = Join-Path $OutputDirectory "reterraforged_quick_noise_$($variant.Name).dll"
-    Copy-Item -Force -LiteralPath $source -Destination $destination
+    $variants = @(
+        @{ Name = 'scalar'; Flags = '' },
+        @{ Name = 'sse42'; Flags = '-C target-feature=+sse4.2' },
+        @{ Name = 'avx2'; Flags = '-C target-feature=+avx2,+fma' },
+        @{ Name = 'avx512'; Flags = '-C target-feature=+avx512f,+fma' }
+    )
+    foreach ($variant in $variants) {
+        $targetDirectory = Join-Path $targetRoot $variant.Name
+        Build-Package 'reterraforged-quick-noise' $targetDirectory $variant.Flags
+        $source = Join-Path $targetDirectory 'release\reterraforged_quick_noise.dll'
+        $destination = Join-Path $OutputDirectory "reterraforged_quick_noise_$($variant.Name).dll"
+        Copy-Item -Force -LiteralPath $source -Destination $destination
+    }
+} finally {
+    Pop-Location
 }
 
 Remove-Item Env:RUSTFLAGS -ErrorAction SilentlyContinue
 & (Join-Path $PSScriptRoot 'verify-windows-backends.ps1') -BinaryDirectory $OutputDirectory
 if ($LASTEXITCODE -ne 0) {
-    throw 'Scalar/AVX2 parity verification failed.'
+    throw 'Native backend parity verification failed.'
 }
 Write-Output "Built ReTerraForged quick-noise natives in $OutputDirectory"

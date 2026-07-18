@@ -2,6 +2,8 @@ package raccoonman.reterraforged.world.worldgen.densityfunction.tile.generation;
 
 import java.util.concurrent.CompletableFuture;
 
+import org.jetbrains.annotations.Nullable;
+
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.concurrent.pool.ArrayPool;
 import raccoonman.reterraforged.world.worldgen.WorldFilters;
@@ -12,6 +14,7 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Size;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile.Chunk;
+import raccoonman.reterraforged.world.worldgen.noise.module.QuickNoiseRuntime;
 
 public class TileGenerator {
 	private Heightmap heightmap;
@@ -24,8 +27,14 @@ public class TileGenerator {
 	private Size tileSizeChunks;
 	private int batchSize;
 	private int batchCount;
+	@Nullable
+	private QuickNoiseRuntime.Engine noiseEngine;
 	
 	public TileGenerator(Heightmap heightmap, WorldFilters filters, int tileChunks, int tileBorder, int batchCount) {
+		this(heightmap, filters, tileChunks, tileBorder, batchCount, null);
+	}
+
+	public TileGenerator(Heightmap heightmap, WorldFilters filters, int tileChunks, int tileBorder, int batchCount, @Nullable QuickNoiseRuntime.Engine noiseEngine) {
 		this.heightmap = heightmap;
 		this.filters = filters;
 		this.cellPool = ArrayPool.of(100, (length) -> {
@@ -42,6 +51,7 @@ public class TileGenerator {
 		this.tileSizeChunks = Size.chunks(tileChunks, tileBorder);
 		this.batchSize = getBatchSize(batchCount, this.tileSizeChunks);
 		this.batchCount = batchCount;
+		this.noiseEngine = noiseEngine;
 	}
 	
 	public Heightmap getHeightmap() {
@@ -56,31 +66,34 @@ public class TileGenerator {
 				int chunkX = batchX * this.batchSize;
 				int chunkZ = batchZ * this.batchSize;
 				futures[batchX * this.batchCount + batchZ] = CompletableFuture.runAsync(() -> {
-			        int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
-			        int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
-		            for (int cZ = chunkZ; cZ < maxZ; cZ++) {
-		            	for (int cX = chunkX; cX < maxX; cX++) {
-			            	Chunk chunk = tile.getChunkWriter(cX, cZ);
-			            	
-			                Rivermap rivers = null;
-	                    	for (int dz = 0; dz < 16; dz++) {
-	                    		for (int dx = 0; dx < 16; dx++) {
-		                    		int worldX = chunk.getBlockX() + dx;
-		                    		int worldZ = chunk.getBlockZ() + dz;
-		                    		Cell cell = chunk.getCell(dx, dz);
-		                    		
-			                        this.heightmap.applyTerrain(cell, worldX, worldZ);
-			                        rivers = Rivermap.get(cell, rivers, this.heightmap);
-			                        this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
-			                        this.heightmap.applyClimate(cell, worldX, worldZ, true);
-			                    }
-			                }
-			            }
-			        }
-				    CellSampler.clearThreadLocalCache();
+					try (QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(this.noiseEngine)) {
+						int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
+						int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
+						for (int cZ = chunkZ; cZ < maxZ; cZ++) {
+							for (int cX = chunkX; cX < maxX; cX++) {
+								Chunk chunk = tile.getChunkWriter(cX, cZ);
+
+								Rivermap rivers = null;
+								for (int dz = 0; dz < 16; dz++) {
+									for (int dx = 0; dx < 16; dx++) {
+										int worldX = chunk.getBlockX() + dx;
+										int worldZ = chunk.getBlockZ() + dz;
+										Cell cell = chunk.getCell(dx, dz);
+
+										QuickNoiseRuntime.prepareSample(worldX, worldZ);
+										this.heightmap.applyTerrain(cell, worldX, worldZ);
+										rivers = Rivermap.get(cell, rivers, this.heightmap);
+										this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
+										this.heightmap.applyClimate(cell, worldX, worldZ, true);
+									}
+								}
+							}
+						}
+						CellSampler.clearThreadLocalCache();
+					}
 				}, ThreadPools.WORLD_GEN);
-	        }
-	    }
+			}
+		}
 		return CompletableFuture.allOf(futures).thenApply((v) -> {
 			this.filters.apply(tile, true);
 			return tile;
@@ -90,38 +103,43 @@ public class TileGenerator {
 	public CompletableFuture<Tile> generateZoomed(float centerX, float centerZ, float zoom, boolean applyOptionalFilters) {
 		Tile tile = this.makeTile(0, 0);
 		CompletableFuture<?>[] futures = new CompletableFuture<?>[this.batchCount * this.batchCount];
-        float translateX = centerX - this.tileSizeBlocks.size() * zoom / 2.0F;
-        float translateZ = centerZ - this.tileSizeBlocks.size() * zoom / 2.0F;
+		float translateX = centerX - this.tileSizeBlocks.size() * zoom / 2.0F;
+		float translateZ = centerZ - this.tileSizeBlocks.size() * zoom / 2.0F;
 		for (int batchZ = 0; batchZ < this.batchCount; batchZ++) {
 			for (int batchX = 0; batchX < this.batchCount; batchX++) {
 				int chunkX = batchX * this.batchSize;
 				int chunkZ = batchZ * this.batchSize;
 				futures[batchX * this.batchCount + batchZ] = CompletableFuture.runAsync(() -> {
-			        int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
-			        int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
-			        for (int cZ = chunkZ; cZ < maxZ; cZ++) {
-			            for (int cX = chunkX; cX < maxX; cX++) {
-			            	Chunk chunk = tile.getChunkWriter(cX, cZ);
-			            	
-			                Rivermap rivers = null;
-	                    	for (int dz = 0; dz < 16; dz++) {
-	                    		for (int dx = 0; dx < 16; dx++) {
-		                    		float worldX = (chunk.getBlockX() + dx) * zoom + translateX;
-		                    		float worldZ = (chunk.getBlockZ() + dz) * zoom + translateZ;
-		                    		Cell cell = chunk.getCell(dx, dz);
-		                    		
-			                        this.heightmap.applyTerrain(cell, worldX, worldZ);
-			                        rivers = Rivermap.get(cell, rivers, this.heightmap);
-			                        this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
-			                        this.heightmap.applyClimate(cell, worldX, worldZ, true);
-			                    }
-			                }
-			            }
-			        }
-				    CellSampler.clearThreadLocalCache();
+					try (QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(this.noiseEngine)) {
+						int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
+						int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
+						for (int cZ = chunkZ; cZ < maxZ; cZ++) {
+							for (int cX = chunkX; cX < maxX; cX++) {
+								Chunk chunk = tile.getChunkWriter(cX, cZ);
+
+								Rivermap rivers = null;
+								for (int dz = 0; dz < 16; dz++) {
+									for (int dx = 0; dx < 16; dx++) {
+										int sampleX = chunk.getBlockX() + dx;
+										int sampleZ = chunk.getBlockZ() + dz;
+										float worldX = sampleX * zoom + translateX;
+										float worldZ = sampleZ * zoom + translateZ;
+										Cell cell = chunk.getCell(dx, dz);
+
+										QuickNoiseRuntime.prepareSample(sampleX, sampleZ, zoom, translateX, zoom, translateZ);
+										this.heightmap.applyTerrain(cell, worldX, worldZ);
+										rivers = Rivermap.get(cell, rivers, this.heightmap);
+										this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
+										this.heightmap.applyClimate(cell, worldX, worldZ, true);
+									}
+								}
+							}
+						}
+						CellSampler.clearThreadLocalCache();
+					}
 				}, ThreadPools.WORLD_GEN);
-	        }
-	    }
+			}
+		}
 		return CompletableFuture.allOf(futures).thenApply((v) -> {
 			this.filters.apply(tile, applyOptionalFilters);
 			return tile;

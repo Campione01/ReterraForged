@@ -28,7 +28,7 @@ record Blend(Noise alpha, Noise lower, Noise upper, float mid, float range, Inte
 	}
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
         float mid = this.alpha.minValue() + (this.alpha.maxValue() - this.alpha.minValue()) * this.mid;
         float blendLower = Math.max(this.alpha.minValue(), mid - this.range / 2.0F);
         float blendUpper = Math.min(this.alpha.maxValue(), mid + this.range / 2.0F);

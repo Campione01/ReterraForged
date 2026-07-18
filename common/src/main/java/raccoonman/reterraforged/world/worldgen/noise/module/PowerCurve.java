@@ -31,7 +31,7 @@ record PowerCurve(Noise input, float power, float mid, float min, float max) imp
 	}
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		float input = this.input.compute(x, z, seed);
         if (input >= this.mid) {
             float part = input - this.mid;

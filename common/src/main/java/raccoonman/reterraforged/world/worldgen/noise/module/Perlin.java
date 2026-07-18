@@ -26,7 +26,7 @@ record Perlin(@Deprecated int seed, float frequency, int octaves, float lacunari
     }
     
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		x *= this.frequency;
 		z *= this.frequency;
 

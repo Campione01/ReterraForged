@@ -11,7 +11,7 @@ record ShiftSeed(Noise input, int shift) implements Noise {
 	).apply(instance, ShiftSeed::new));
 
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return this.input.compute(x, z, seed + this.shift);
 	}
 

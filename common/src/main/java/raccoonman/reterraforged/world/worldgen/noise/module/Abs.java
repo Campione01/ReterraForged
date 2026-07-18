@@ -10,7 +10,7 @@ public record Abs(Noise input) implements Noise {
 	).apply(instance, Abs::new));
 	
 	@Override
-	public float compute(float x, float z, int seed) {
+	public float computeLegacy(float x, float z, int seed) {
 		return Math.abs(this.input.compute(x, z, seed));
 	}
 

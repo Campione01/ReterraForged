@@ -52,6 +52,7 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_BUTTON_EXPORT_AS_DATAPACK, "Export As Datapack");
 			this.add(RTFTranslationKeys.GUI_BUTTON_EXPORT_SUCCESS, "Exported Preset");
 			this.add(RTFTranslationKeys.GUI_BUTTON_SEED, "Seed");
+			this.add(RTFTranslationKeys.GUI_BUTTON_NOISE_ENGINE, "2D Noise Engine");
 			this.add(RTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE, "Continent Type");
 			this.add(RTFTranslationKeys.GUI_BUTTON_CONTINENT_SHAPE, "Continent Shape");
 			this.add(RTFTranslationKeys.GUI_BUTTON_SPAWN_TYPE, "Spawn Type");
@@ -86,6 +87,8 @@ public final class RTFLanguageProvider {
 			this.add(RTFTranslationKeys.GUI_VALUE_CAVE_COMPATIBILITY_MODE + ".vanilla", "Vanilla");
 			this.add(RTFTranslationKeys.GUI_VALUE_CAVE_DENSITY_ALGORITHM + ".quick_v1", "Quick V1");
 			this.add(RTFTranslationKeys.GUI_VALUE_CAVE_DENSITY_ALGORITHM + ".legacy", "Legacy");
+			this.add(RTFTranslationKeys.GUI_VALUE_NOISE_ENGINE + ".quick_v2", "Quick V2");
+			this.add(RTFTranslationKeys.GUI_VALUE_NOISE_ENGINE + ".legacy", "Legacy");
 
 			this.add(RTFTranslationKeys.GUI_SLIDER_ZOOM, "Zoom");
 			this.add(RTFTranslationKeys.GUI_SLIDER_CONTINENT_SCALE, "Continent Scale");
@@ -234,6 +237,7 @@ public final class RTFLanguageProvider {
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_CONTINENT_TYPE), "Controls the continent generator type");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_CONTINENT_SHAPE), "Controls how continent shapes are calculated. You may also need to adjust the transition points to ensure beaches etc still form.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_SPAWN_TYPE), "Set whether spawn should be close to x=0,z=0 or the centre of the nearest continent");
+			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_NOISE_ENGINE), "QUICK_V2 runs supported 2D terrain and climate noise graphs through the bundled quick-noise Grid/Batch backend. LEGACY uses the Java noise engine. Changing this setting changes new terrain output.");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_LARGE_ORE_VEINS), "Set whether large ore veins spawn");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_LEGACY_CARVER_DISTRIBUTION), "Set whether carvers use 1.16 distribution");
 			this.add(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_CAVE_DENSITY_ALGORITHM), "QUICK_V1 uses the versioned quick-noise 3D cave density algorithm for new worlds. LEGACY keeps the previous density graph.");
