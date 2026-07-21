@@ -29,8 +29,11 @@ loom {
 configurations {
     common
     shadowCommon
+    platformTestCommon
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
+    testCompileClasspath.extendsFrom common
+    testRuntimeClasspath.extendsFrom common
     developmentNeoForge.extendsFrom common
 }
 
@@ -48,6 +51,9 @@ dependencies {
     
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
+    platformTestCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
+    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 sourceSets {
@@ -58,6 +64,11 @@ sourceSets {
             ]
         }
     }
+}
+
+test {
+    useJUnitPlatform()
+    classpath = sourceSets.test.output + sourceSets.main.output + configurations.platformTestCommon + (configurations.testRuntimeClasspath - configurations.common)
 }
 
 processResources {

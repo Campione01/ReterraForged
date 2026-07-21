@@ -22,10 +22,12 @@ QUICK_V1 intentionally changes cave output and does not preserve legacy world or
 
 ## QUICK_V2 2D noise engine
 
-- QUICK_V2 is the default for presets that do not specify `world.noiseEngine`. It compiles supported RTF-owned terrain and climate noise graphs directly to the pinned quick-noise Grid/Batch backend.
-- Windows x86-64 dispatch selects SSE4.2, AVX2+FMA, or AVX512+FMA once per process. Fixed 32x32 tiles support normal generation, global terrain scaling, and zoomed previews without creating executors or changing chunk scheduling.
+- QUICK_V2 is the default for presets that do not specify `world.noiseEngine`. It compiles supported RTF-owned terrain and climate graphs into exact RTF opcodes executed on the pinned quick-noise native/SIMD substrate.
+- Windows x86-64 dispatch selects SSE4.2, AVX2+FMA, or AVX512+FMA once per process. Globally aligned 64x64 tiles with two cache slots support normal generation, global terrain scaling, and zoomed previews without increasing the original per-graph, per-thread float capacity.
+- RTF Perlin, Perlin2, Simplex, ridge, Billow, Cubic, White, Worley, WorleyEdge, trigonometric, seed, interpolation, range, and graph-operator behavior follow the legacy Java node contracts. Unsupported structural or dynamic-coordinate roots execute wholly through LEGACY and cannot mix native and Java fields inside one root.
 - River networks, neighborhood erosion, biome selection, aquifers, structures, surface rules, block placement, and third-party `Noise.compute` implementations remain on their existing CPU/Minecraft paths.
-- QUICK_V2 and `LEGACY` are new-world algorithms with different terrain output. Cave `QUICK_V1`/`LEGACY` selection remains independent.
+- QUICK_V2 is a new execution engine rather than a new terrain design. Its exported fields use deterministic `1/4096` quantization, so old and new chunks are not promised to be byte-identical at threshold boundaries, but presets no longer require retuning to recover legacy RTF terrain distributions. Cave `QUICK_V1`/`LEGACY` selection remains independent.
+- Exact QUICK_V2 RTF programs are bit-identical across the packaged scalar, SSE4.2, AVX2, and AVX512 backends after exported-field quantization.
 - CPU-accelerated C2ME can coexist with QUICK_V2 because RTF owns no C2ME task, queue, future, density compiler, or cache integration.
 
 ## Sources and attribution

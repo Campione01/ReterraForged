@@ -14,6 +14,14 @@ public static class QuickNoiseBackendParity {
     private const int CaveSamples = 32 * 32 * 32;
     private const uint AbiVersion = 2;
 
+    [DllImport("kernel32")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsProcessorFeaturePresent(uint processorFeature);
+
+    public static bool SupportsFeature(uint processorFeature) {
+        return IsProcessorFeaturePresent(processorFeature);
+    }
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     private delegate uint GetAbiVersion();
 
@@ -40,11 +48,24 @@ public static class QuickNoiseBackendParity {
         public readonly FreeProgram Free;
         public readonly FillProgram2d Fill2d;
 
+        [DllImport("kernel32", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr LoadLibrary(string path);
+
+        [DllImport("kernel32", CharSet = CharSet.Ansi, SetLastError = true)]
+        private static extern IntPtr GetProcAddress(IntPtr library, string name);
+
+        [DllImport("kernel32", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool FreeLibrary(IntPtr library);
+
         public Backend(string path) {
-            library = NativeLibrary.Load(path);
+            library = LoadLibrary(path);
+            if (library == IntPtr.Zero) {
+                throw new InvalidOperationException("Could not load " + path + "; Win32 error " + Marshal.GetLastWin32Error());
+            }
             GetAbiVersion getAbi = Load<GetAbiVersion>("rtf_quick_noise_abi_version");
             if (getAbi() != AbiVersion) {
-                throw new InvalidOperationException($"Unexpected ABI version in {path}");
+                throw new InvalidOperationException("Unexpected ABI version in " + path);
             }
             FillCave = Load<FillTile>("rtf_quick_noise_fill_cave_tile_v1");
             Compile = Load<CompileProgram>("rtf_quick_noise_compile_program_v2");
@@ -53,12 +74,16 @@ public static class QuickNoiseBackendParity {
             Fill2d = Load<FillProgram2d>("rtf_quick_noise_fill_program_2d_v2");
         }
 
-        private T Load<T>(string name) where T : Delegate {
-            return Marshal.GetDelegateForFunctionPointer<T>(NativeLibrary.GetExport(library, name));
+        private T Load<T>(string name) where T : class {
+            IntPtr address = GetProcAddress(library, name);
+            if (address == IntPtr.Zero) {
+                throw new InvalidOperationException("Could not resolve " + name + "; Win32 error " + Marshal.GetLastWin32Error());
+            }
+            return (T)(object)Marshal.GetDelegateForFunctionPointer(address, typeof(T));
         }
 
         public void Dispose() {
-            NativeLibrary.Free(library);
+            FreeLibrary(library);
         }
     }
 
@@ -71,23 +96,24 @@ public static class QuickNoiseBackendParity {
 
         using (Backend scalar = new Backend(scalarPath)) {
             foreach (string variant in caveVariants) {
-                string path = Path.Combine(directory, $"reterraforged_quick_noise_{variant}.dll");
+                string path = Path.Combine(directory, "reterraforged_quick_noise_" + variant + ".dll");
                 using (Backend candidate = new Backend(path)) {
                     caveComparisons += VerifyCaves(scalar, candidate, variant);
                 }
             }
-        }
-        using (Backend sse42 = new Backend(sse42Path)) {
-            programComparisons += VerifyProgram(sse42, "sse42", program);
-        }
-        foreach (string variant in programVariants) {
-            string path = Path.Combine(directory, $"reterraforged_quick_noise_{variant}.dll");
-            using (Backend candidate = new Backend(path)) {
-                programComparisons += VerifyProgram(candidate, variant, program);
+
+            using (Backend sse42 = new Backend(sse42Path)) {
+                programComparisons += VerifyProgram(scalar, sse42, "sse42", program);
+            }
+            foreach (string variant in programVariants) {
+                string path = Path.Combine(directory, "reterraforged_quick_noise_" + variant + ".dll");
+                using (Backend candidate = new Backend(path)) {
+                    programComparisons += VerifyProgram(scalar, candidate, variant, program);
+                }
             }
         }
 
-        return $"Verified scalar/{string.Join("/", caveVariants)} QUICK_V1 parity for {caveComparisons} samples and per-backend QUICK_V2 determinism for {programComparisons} samples";
+        return string.Format("Verified scalar/{0} QUICK_V1 parity for {1} samples and scalar/SSE4.2/{2} QUICK_V2 parity for {3} samples", string.Join("/", caveVariants), caveComparisons, string.Join("/", programVariants), programComparisons);
     }
 
     private static int VerifyCaves(Backend scalar, Backend candidate, string variant) {
@@ -110,18 +136,21 @@ public static class QuickNoiseBackendParity {
         }
     }
 
-    private static int VerifyProgram(Backend candidate, string variant, byte[] program) {
+    private static int VerifyProgram(Backend reference, Backend candidate, string variant, byte[] program) {
         IntPtr programBuffer = Marshal.AllocHGlobal(program.Length);
         Marshal.Copy(program, 0, programBuffer, program.Length);
+        ulong referenceHandle = 0;
         ulong candidateHandle = 0;
         try {
+            int referenceCompile = reference.Compile(programBuffer, (UIntPtr)program.Length, out referenceHandle);
             int candidateCompile = candidate.Compile(programBuffer, (UIntPtr)program.Length, out candidateHandle);
-            if (candidateCompile != 0) {
-                throw new InvalidOperationException($"{variant} QUICK_V2 compile failed with status {candidateCompile}");
+            if (referenceCompile != 0 || candidateCompile != 0) {
+                throw new InvalidOperationException(string.Format("scalar/{0} QUICK_V2 compile failed: scalar={1}, candidate={2}", variant, referenceCompile, candidateCompile));
             }
+            int referenceRoots = checked((int)reference.Outputs(referenceHandle).ToUInt64());
             int roots = checked((int)candidate.Outputs(candidateHandle).ToUInt64());
-            if (roots == 0) {
-                throw new InvalidOperationException($"{variant} QUICK_V2 program has no roots");
+            if (roots == 0 || roots != referenceRoots) {
+                throw new InvalidOperationException(string.Format("scalar/{0} QUICK_V2 root mismatch: scalar={1}, candidate={2}", variant, referenceRoots, roots));
             }
 
             long[] seeds = { 991L, -72727272727L, long.MaxValue };
@@ -134,10 +163,10 @@ public static class QuickNoiseBackendParity {
                 IntPtr expectedBuffer = Marshal.AllocHGlobal(samples * sizeof(float));
                 IntPtr actualBuffer = Marshal.AllocHGlobal(samples * sizeof(float));
                 try {
-                    int expectedStatus = candidate.Fill2d(candidateHandle, seeds[testCase], regions[testCase, 0], regions[testCase, 1], (UIntPtr)width, (UIntPtr)height, expectedBuffer, (UIntPtr)samples);
+                    int expectedStatus = reference.Fill2d(referenceHandle, seeds[testCase], regions[testCase, 0], regions[testCase, 1], (UIntPtr)width, (UIntPtr)height, expectedBuffer, (UIntPtr)samples);
                     int actualStatus = candidate.Fill2d(candidateHandle, seeds[testCase], regions[testCase, 0], regions[testCase, 1], (UIntPtr)width, (UIntPtr)height, actualBuffer, (UIntPtr)samples);
-                    RequireSuccess(expectedStatus, actualStatus, variant, variant, "QUICK_V2 repeat", testCase);
-                    Compare(expectedBuffer, actualBuffer, samples, variant, variant, "QUICK_V2 repeat", testCase);
+                    RequireSuccess(expectedStatus, actualStatus, "scalar", variant, "QUICK_V2", testCase);
+                    Compare(expectedBuffer, actualBuffer, samples, "scalar", variant, "QUICK_V2", testCase);
                     total += samples;
                 } finally {
                     Marshal.FreeHGlobal(actualBuffer);
@@ -149,6 +178,9 @@ public static class QuickNoiseBackendParity {
         } finally {
             if (candidateHandle != 0) {
                 candidate.Free(candidateHandle);
+            }
+            if (referenceHandle != 0) {
+                reference.Free(referenceHandle);
             }
             Marshal.FreeHGlobal(programBuffer);
         }
@@ -178,7 +210,7 @@ public static class QuickNoiseBackendParity {
                         int leftIndex = fieldOffset + z * width + x;
                         int rightIndex = fieldOffset + z * width + x - overlap;
                         if (left[leftIndex] != right[rightIndex]) {
-                            throw new InvalidOperationException($"{variant} QUICK_V2 overlap mismatch at root {root}, x={x}, z={z}: left=0x{left[leftIndex]:X8}, right=0x{right[rightIndex]:X8}");
+                            throw new InvalidOperationException(string.Format("{0} QUICK_V2 overlap mismatch at root {1}, x={2}, z={3}: left=0x{4:X8}, right=0x{5:X8}", variant, root, x, z, left[leftIndex], right[rightIndex]));
                         }
                         compared++;
                     }
@@ -193,7 +225,7 @@ public static class QuickNoiseBackendParity {
 
     private static void RequireSuccess(int expected, int actual, string reference, string variant, string stage, int testCase) {
         if (expected != 0 || actual != 0) {
-            throw new InvalidOperationException($"{reference}/{variant} {stage} failure in case {testCase}: reference={expected}, candidate={actual}");
+            throw new InvalidOperationException(string.Format("{0}/{1} {2} failure in case {3}: reference={4}, candidate={5}", reference, variant, stage, testCase, expected, actual));
         }
     }
 
@@ -204,7 +236,7 @@ public static class QuickNoiseBackendParity {
         Marshal.Copy(actualBuffer, actual, 0, samples);
         for (int sample = 0; sample < samples; sample++) {
             if (expected[sample] != actual[sample]) {
-                throw new InvalidOperationException($"{reference}/{variant} {stage} mismatch in case {testCase}, sample {sample}: reference=0x{expected[sample]:X8}, candidate=0x{actual[sample]:X8}");
+                throw new InvalidOperationException(string.Format("{0}/{1} {2} mismatch in case {3}, sample {4}: reference=0x{5:X8}, candidate=0x{6:X8}", reference, variant, stage, testCase, sample, expected[sample], actual[sample]));
             }
         }
     }
@@ -213,9 +245,9 @@ public static class QuickNoiseBackendParity {
         using (MemoryStream stream = new MemoryStream())
         using (BinaryWriter writer = new BinaryWriter(stream)) {
             writer.Write(0x32564E51U);
-            writer.Write(2U);
-            writer.Write(16U);
-            writer.Write(16U);
+            writer.Write(3U);
+            writer.Write(31U);
+            writer.Write(13U);
             writer.Write(48U);
             WriteNode(writer, 1, 4, -1, -1, 0x514E5632L, 1F / 64F, 2F, 0.5F, 1F, 1F, 1F);
             WriteNode(writer, 2, 4, -1, -1, 0x56414C55L, 1F / 96F, 2.1F, 0.45F, 0.8F, 1F, 1F);
@@ -233,7 +265,22 @@ public static class QuickNoiseBackendParity {
             WriteNode(writer, 23, 11, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
             WriteNode(writer, 24, 12, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
             WriteNode(writer, 25, 13, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
-            for (uint root = 0; root < 16; root++) {
+            WriteNode(writer, 32, -1, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
+            WriteNode(writer, 33, -1, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
+            WriteNode(writer, 8, 4, 16, 17, 0x5045524CL, 1F / 67F, 2.05F, 0.48F, -1F, 1F, 1F);
+            WriteNode(writer, 9, 3, 16, 17, 0x50455232L, 1F / 71F, 2F, 0.52F, -1F, 1F, 2F);
+            WriteNode(writer, 10, 4, 16, 17, 0x53494D31L, 1F / 73F, 2.1F, 0.47F, -1F, 1F, 0F);
+            WriteNode(writer, 11, 3, 16, 17, 0x53494D32L, 1F / 79F, 1.95F, 0.53F, -1F, 1F, 0F);
+            WriteNode(writer, 12, 4, 16, 17, 0x52494450L, 1F / 83F, 2F, 0.5F, 0F, 1F, 1F);
+            WriteNode(writer, 13, 4, 16, 17, 0x52494453L, 1F / 89F, 2F, 0.5F, 0F, 1F, 0F);
+            WriteNode(writer, 14, 4, 16, 17, 0x42494C4CL, 1F / 97F, 2F, 0.5F, 0F, 1F, 1F);
+            WriteNode(writer, 15, 3, 16, 17, 0x43554245L, 1F / 101F, 2F, 0.5F, -1F, 1F, 0F);
+            WriteNode(writer, 40, 1, 16, 17, 0x57484954L, 1F / 17F, 0F, 0F, 0F, 1F, 0F);
+            WriteNode(writer, 41, 1, 16, 17, 0x574F524CL, 1F / 107F, 0.85F, 0F, 1F, -1F, 1F);
+            WriteNode(writer, 42, 1, 16, 17, 0x45444745L, 1F / 109F, 0.9F, 3F, 2F, 0F, 1F);
+            WriteNode(writer, 43, 16, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
+            WriteNode(writer, 44, 17, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
+            for (uint root = 18; root < 31; root++) {
                 writer.Write(root);
             }
             return stream.ToArray();
@@ -258,11 +305,11 @@ public static class QuickNoiseBackendParity {
 
 $caveVariants = @()
 $programVariants = @()
-if ([Runtime.Intrinsics.X86.Avx2]::IsSupported -and [Runtime.Intrinsics.X86.Fma]::IsSupported) {
+if ([QuickNoiseBackendParity]::SupportsFeature(40)) {
     $caveVariants += 'avx2'
     $programVariants += 'avx2'
 }
-if ([Runtime.Intrinsics.X86.Avx512F]::IsSupported -and [Runtime.Intrinsics.X86.Fma]::IsSupported) {
+if ([QuickNoiseBackendParity]::SupportsFeature(41)) {
     $caveVariants += 'avx512'
     $programVariants += 'avx512'
 }

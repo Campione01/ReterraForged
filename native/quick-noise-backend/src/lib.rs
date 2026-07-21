@@ -8,6 +8,8 @@ use std::sync::{Arc, OnceLock, RwLock};
 use quick_noise::simd::SimdSliceIterExt;
 use quick_noise::{BatchNoise, Billow, Cellular, Fbm, Grid, Perlin, Ridged, Simplex, Value};
 
+mod rtf_noise;
+
 pub const TILE_SIZE: usize = 32;
 pub const TILE_SAMPLES: usize = TILE_SIZE * TILE_SIZE * TILE_SIZE;
 
@@ -19,7 +21,7 @@ const QUANTIZATION: f32 = 4096.0;
 const ABI_VERSION: u32 = 2;
 
 const PROGRAM_MAGIC: u32 = u32::from_le_bytes(*b"QNV2");
-const PROGRAM_VERSION: u32 = 2;
+const PROGRAM_VERSION: u32 = 3;
 const PROGRAM_HEADER_BYTES: usize = 20;
 const PROGRAM_NODE_BYTES: usize = 48;
 
@@ -46,6 +48,14 @@ const OP_CELLULAR_FBM: u32 = 4;
 const OP_PERLIN_BILLOW: u32 = 5;
 const OP_PERLIN_RIDGED: u32 = 6;
 const OP_SIMPLEX_RIDGED: u32 = 7;
+const OP_RTF_PERLIN: u32 = 8;
+const OP_RTF_PERLIN2: u32 = 9;
+const OP_RTF_SIMPLEX: u32 = 10;
+const OP_RTF_SIMPLEX2: u32 = 11;
+const OP_RTF_PERLIN_RIDGE: u32 = 12;
+const OP_RTF_SIMPLEX_RIDGE: u32 = 13;
+const OP_RTF_BILLOW: u32 = 14;
+const OP_RTF_CUBIC: u32 = 15;
 const OP_ADD: u32 = 16;
 const OP_MULTIPLY: u32 = 17;
 const OP_MIN: u32 = 18;
@@ -70,6 +80,11 @@ const OP_DIVIDE: u32 = 36;
 const OP_POW_DYNAMIC: u32 = 37;
 const OP_ROUND: u32 = 38;
 const OP_GREATER_EQUAL: u32 = 39;
+const OP_RTF_WHITE: u32 = 40;
+const OP_RTF_WORLEY: u32 = 41;
+const OP_RTF_WORLEY_EDGE: u32 = 42;
+const OP_RTF_SIN: u32 = 43;
+const OP_RTF_COS: u32 = 44;
 
 static NEXT_PROGRAM_HANDLE: AtomicU64 = AtomicU64::new(1);
 static PROGRAMS: OnceLock<RwLock<HashMap<u64, Arc<Program>>>> = OnceLock::new();
@@ -261,7 +276,7 @@ fn parse_program(bytes: &[u8]) -> Result<Program, ()> {
                 return Err(());
             }
         }
-        validate_node(opcode, input_a, input_b, input_c, index)?;
+        validate_node(opcode, input_a, input_b, input_c, &params, index)?;
         if opcode == OP_STEPS && params[0] <= 0.0 {
             return Err(());
         }
@@ -291,9 +306,13 @@ fn validate_node(
     input_a: i32,
     input_b: i32,
     input_c: i32,
+    params: &[f32; 6],
     index: usize,
 ) -> Result<(), ()> {
     let valid_input = |input: i32| input >= 0 && (input as usize) < index;
+    let valid_code = |value: f32, min: i32, max: i32| {
+        value == value.trunc() && value >= min as f32 && value <= max as f32
+    };
     match opcode {
         OP_CONSTANT | OP_COORD_X | OP_COORD_Z => Ok(()),
         OP_PERLIN_FBM | OP_VALUE_FBM | OP_SIMPLEX_FBM | OP_CELLULAR_FBM | OP_PERLIN_BILLOW
@@ -301,6 +320,56 @@ fn validate_node(
             let coordinates_are_valid =
                 (input_b == -1 && input_c == -1) || (valid_input(input_b) && valid_input(input_c));
             if (1..=32).contains(&input_a) && coordinates_are_valid {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        OP_RTF_PERLIN | OP_RTF_PERLIN2 | OP_RTF_PERLIN_RIDGE | OP_RTF_BILLOW => {
+            if (1..=32).contains(&input_a)
+                && valid_input(input_b)
+                && valid_input(input_c)
+                && valid_code(params[5], 0, 2)
+            {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        OP_RTF_SIMPLEX | OP_RTF_SIMPLEX2 | OP_RTF_SIMPLEX_RIDGE | OP_RTF_CUBIC => {
+            if (1..=32).contains(&input_a) && valid_input(input_b) && valid_input(input_c) {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        OP_RTF_WHITE => {
+            if input_a == 1 && valid_input(input_b) && valid_input(input_c) {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        OP_RTF_WORLEY => {
+            if input_a == 1
+                && valid_input(input_b)
+                && valid_input(input_c)
+                && matches!(params[2] as i32, 0 | 2)
+                && valid_code(params[2], 0, 2)
+                && valid_code(params[3], 0, 2)
+            {
+                Ok(())
+            } else {
+                Err(())
+            }
+        }
+        OP_RTF_WORLEY_EDGE => {
+            if input_a == 1
+                && valid_input(input_b)
+                && valid_input(input_c)
+                && valid_code(params[2], 0, 4)
+                && valid_code(params[3], 0, 2)
+            {
                 Ok(())
             } else {
                 Err(())
@@ -315,7 +384,7 @@ fn validate_node(
             }
         }
         OP_ABS | OP_CLAMP | OP_MAP | OP_INVERT | OP_CURVE3 | OP_CURVE5 | OP_POW | OP_SIGNED_POW
-        | OP_BOOST | OP_STEPS | OP_SIN | OP_COS | OP_ROUND => {
+        | OP_BOOST | OP_STEPS | OP_SIN | OP_COS | OP_ROUND | OP_RTF_SIN | OP_RTF_COS => {
             if valid_input(input_a) {
                 Ok(())
             } else {
@@ -367,6 +436,19 @@ fn fill_program_2d(
                 OP_PERLIN_BILLOW => fill_billow_perlin(&grid, inputs, seed, node, target),
                 OP_PERLIN_RIDGED => fill_ridged_perlin(&grid, inputs, seed, node, target),
                 OP_SIMPLEX_RIDGED => fill_ridged_simplex(&grid, inputs, seed, node, target),
+                OP_RTF_PERLIN => rtf_noise::fill_perlin(inputs, seed, node, target, false),
+                OP_RTF_PERLIN2 => rtf_noise::fill_perlin(inputs, seed, node, target, true),
+                OP_RTF_SIMPLEX => rtf_noise::fill_simplex(inputs, seed, node, target, false),
+                OP_RTF_SIMPLEX2 => rtf_noise::fill_simplex(inputs, seed, node, target, true),
+                OP_RTF_PERLIN_RIDGE => {
+                    rtf_noise::fill_perlin_ridge(inputs, seed, node, target, false)
+                }
+                OP_RTF_SIMPLEX_RIDGE => rtf_noise::fill_simplex_ridge(inputs, seed, node, target),
+                OP_RTF_BILLOW => rtf_noise::fill_perlin_ridge(inputs, seed, node, target, true),
+                OP_RTF_CUBIC => rtf_noise::fill_cubic(inputs, seed, node, target),
+                OP_RTF_WHITE => rtf_noise::fill_white(inputs, seed, node, target),
+                OP_RTF_WORLEY => rtf_noise::fill_worley(inputs, seed, node, target),
+                OP_RTF_WORLEY_EDGE => rtf_noise::fill_worley_edge(inputs, seed, node, target),
                 OP_ADD => apply_binary(inputs, node, target, |a, b| a + b),
                 OP_MULTIPLY => apply_binary(inputs, node, target, |a, b| a * b),
                 OP_MIN => apply_binary(inputs, node, target, f32::min),
@@ -451,7 +533,7 @@ fn fill_program_2d(
                         value = 1.0 - value;
                         let stepped = (value * step_count).trunc() / step_count;
                         let delta = value - stepped;
-                        let alpha = (delta * step_count - slope_min) / range;
+                        let alpha = ((delta * step_count - slope_min) / range).clamp(0.0, 1.0);
                         let alpha = match curve {
                             1 => alpha * alpha * (3.0 - 2.0 * alpha),
                             2 => alpha * alpha * alpha * (alpha * (alpha * 6.0 - 15.0) + 10.0),
@@ -462,6 +544,8 @@ fn fill_program_2d(
                 }
                 OP_SIN => apply_unary(inputs, node, target, f32::sin),
                 OP_COS => apply_unary(inputs, node, target, f32::cos),
+                OP_RTF_SIN => apply_unary(inputs, node, target, rtf_noise::legacy_sin),
+                OP_RTF_COS => apply_unary(inputs, node, target, rtf_noise::legacy_cos),
                 _ => return Err(()),
             }
         }
@@ -1132,6 +1216,37 @@ mod tests {
             for x in 16..32 {
                 assert_eq!(left[z * 32 + x], right[z * 32 + x - 16]);
             }
+        }
+    }
+
+    #[test]
+    fn quick_v2_steps_clamps_slope_alpha_like_legacy_map() {
+        for (input, expected) in [(0.99, 1.0), (0.76, 0.76)] {
+            let program = parse_program(&encode_program(
+                &[
+                    ProgramNode {
+                        opcode: OP_CONSTANT,
+                        input_a: -1,
+                        input_b: -1,
+                        input_c: -1,
+                        seed_offset: 0,
+                        params: [input, 0.0, 0.0, 0.0, 0.0, 0.0],
+                    },
+                    ProgramNode {
+                        opcode: OP_STEPS,
+                        input_a: 0,
+                        input_b: -1,
+                        input_c: -1,
+                        seed_offset: 0,
+                        params: [4.0, 0.2, 0.8, 0.0, 0.0, 0.0],
+                    },
+                ],
+                &[1],
+            ))
+            .unwrap();
+            let mut output = [0.0];
+            fill_program_2d(&program, 0, 0, 0, 1, 1, &mut output).unwrap();
+            assert_eq!(output[0], quantize(expected));
         }
     }
 

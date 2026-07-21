@@ -9,6 +9,9 @@ import raccoonman.reterraforged.world.worldgen.noise.domain.DirectWarp;
 import raccoonman.reterraforged.world.worldgen.noise.domain.DirectionWarp;
 import raccoonman.reterraforged.world.worldgen.noise.domain.Domain;
 import raccoonman.reterraforged.world.worldgen.noise.domain.DomainWarp;
+import raccoonman.reterraforged.world.worldgen.noise.function.CellFunction;
+import raccoonman.reterraforged.world.worldgen.noise.function.DistanceFunction;
+import raccoonman.reterraforged.world.worldgen.noise.function.EdgeFunction;
 import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 import raccoonman.reterraforged.world.worldgen.quicknoise.QuickNoiseGraph;
 import raccoonman.reterraforged.world.worldgen.quicknoise.QuickNoiseGraph.Opcode;
@@ -85,45 +88,48 @@ public final class QuickNoiseGraphCompiler {
 				return this.compile(frequency.input(), new Coordinates(scaledX, scaledZ), seedOffset);
 			}
 			if(noise instanceof Perlin perlin) {
-				return this.primitive(Opcode.PERLIN_FBM, perlin.octaves(), coordinates, seedOffset + perlin.seed(), perlin.frequency(), perlin.lacunarity(), perlin.gain(), noise);
+				return this.rtfPrimitive(Opcode.RTF_PERLIN, perlin.octaves(), coordinates, perlin.seed(), perlin.frequency(), perlin.lacunarity(), perlin.gain(), perlin.min(), perlin.max(), curveCode(perlin.interpolation()));
 			}
 			if(noise instanceof Perlin2 perlin) {
-				return this.primitive(Opcode.PERLIN_FBM, perlin.octaves(), coordinates, seedOffset + perlin.seed(), perlin.frequency(), perlin.lacunarity(), perlin.gain(), noise);
+				return this.rtfPrimitive(Opcode.RTF_PERLIN2, perlin.octaves(), coordinates, perlin.seed(), perlin.frequency(), perlin.lacunarity(), perlin.gain(), perlin.min(), perlin.max(), curveCode(perlin.interpolation()));
 			}
 			if(noise instanceof Simplex simplex) {
-				return this.primitive(Opcode.SIMPLEX_FBM, simplex.octaves(), coordinates, seedOffset, simplex.frequency(), simplex.lacunarity(), simplex.gain(), noise);
+				return this.rtfPrimitive(Opcode.RTF_SIMPLEX, simplex.octaves(), coordinates, seedOffset, simplex.frequency(), simplex.lacunarity(), simplex.gain(), simplex.min(), simplex.max(), 0.0F);
 			}
 			if(noise instanceof Simplex2 simplex) {
-				return this.primitive(Opcode.SIMPLEX_FBM, simplex.octaves(), coordinates, seedOffset, simplex.frequency(), simplex.lacunarity(), simplex.gain(), noise);
+				return this.rtfPrimitive(Opcode.RTF_SIMPLEX2, simplex.octaves(), coordinates, seedOffset, simplex.frequency(), simplex.lacunarity(), simplex.gain(), simplex.min(), simplex.max(), 0.0F);
 			}
 			if(noise instanceof PerlinRidge ridge) {
-				return this.primitive(Opcode.PERLIN_RIDGED, ridge.octaves(), coordinates, seedOffset, ridge.frequency(), ridge.lacunarity(), ridge.gain(), noise);
+				return this.rtfPrimitive(Opcode.RTF_PERLIN_RIDGE, ridge.octaves(), coordinates, seedOffset, ridge.frequency(), ridge.lacunarity(), ridge.gain(), ridge.min(), ridge.max(), curveCode(ridge.interpolation()));
 			}
 			if(noise instanceof SimplexRidge ridge) {
-				return this.primitive(Opcode.SIMPLEX_RIDGED, ridge.octaves(), coordinates, seedOffset, ridge.frequency(), ridge.lacunarity(), ridge.gain(), noise);
+				return this.rtfPrimitive(Opcode.RTF_SIMPLEX_RIDGE, ridge.octaves(), coordinates, seedOffset, ridge.frequency(), ridge.lacunarity(), ridge.gain(), ridge.min(), ridge.max(), 0.0F);
 			}
 			if(noise instanceof Billow billow) {
-				return this.primitive(Opcode.PERLIN_BILLOW, billow.octaves(), coordinates, seedOffset, billow.frequency(), billow.lacunarity(), billow.gain(), noise);
+				return this.rtfPrimitive(Opcode.RTF_BILLOW, billow.octaves(), coordinates, seedOffset, billow.frequency(), billow.lacunarity(), billow.gain(), billow.min(), billow.max(), curveCode(billow.interpolation()));
 			}
 			if(noise instanceof Cubic cubic) {
-				return this.primitive(Opcode.VALUE_FBM, cubic.octaves(), coordinates, seedOffset, cubic.frequency(), cubic.lacunarity(), cubic.gain(), noise);
+				return this.rtfPrimitive(Opcode.RTF_CUBIC, cubic.octaves(), coordinates, seedOffset, cubic.frequency(), cubic.lacunarity(), cubic.gain(), cubic.minValue(), cubic.maxValue(), 0.0F);
 			}
 			if(noise instanceof White white) {
-				return this.primitive(Opcode.VALUE_FBM, 1, coordinates, seedOffset, white.frequency(), 2.0F, 0.5F, noise);
+				return this.rtfPrimitive(Opcode.RTF_WHITE, 1, coordinates, seedOffset, white.frequency(), 0.0F, 0.0F, 0.0F, 1.0F, 0.0F);
 			}
 			if(noise instanceof Sin sin) {
 				int x = this.builder.binary(Opcode.MULTIPLY, this.coordinateX(coordinates), this.builder.constant(sin.frequency()));
 				int z = this.builder.binary(Opcode.MULTIPLY, this.coordinateZ(coordinates), this.builder.constant(sin.frequency()));
-				int sinX = this.builder.unary(Opcode.SIN, x);
-				int sinZ = this.builder.unary(Opcode.SIN, z);
+				int sinX = this.builder.unary(Opcode.RTF_SIN, x);
+				int sinZ = this.builder.unary(Opcode.RTF_SIN, z);
 				int value = this.builder.ternary(Opcode.LERP, this.compile(sin.alpha(), coordinates, seedOffset), sinX, sinZ);
 				return this.map(value, -1.0F, 1.0F, 0.0F, 1.0F);
 			}
 			if(noise instanceof Worley worley) {
-				return this.cellular(coordinates, seedOffset, worley.frequency(), noise);
+				if(worley.cellFunction() == CellFunction.NOISE_LOOKUP) {
+					throw UnsupportedGraph.INSTANCE;
+				}
+				return this.rtfPrimitive(Opcode.RTF_WORLEY, 1, coordinates, seedOffset, worley.frequency(), worley.distance(), cellFunctionCode(worley.cellFunction()), distanceFunctionCode(worley.distanceFunction()), worley.min(), worley.max());
 			}
 			if(noise instanceof WorleyEdge worley) {
-				return this.primitive(Opcode.PERLIN_RIDGED, 1, coordinates, seedOffset, worley.frequency(), 2.0F, 0.5F, noise);
+				return this.rtfPrimitive(Opcode.RTF_WORLEY_EDGE, 1, coordinates, seedOffset, worley.frequency(), worley.distance(), edgeFunctionCode(worley.edgeFunction()), distanceFunctionCode(worley.distanceFunction()), worley.edgeFunction().min(), worley.edgeFunction().max());
 			}
 			if(noise instanceof Add add) {
 				return this.binary(Opcode.ADD, add.input1(), add.input2(), coordinates, seedOffset);
@@ -173,7 +179,8 @@ public final class QuickNoiseGraphCompiler {
 			}
 			if(noise instanceof Invert invert) {
 				int input = this.compile(invert.input(), coordinates, seedOffset);
-				return this.map(input, invert.input().minValue(), invert.input().maxValue(), invert.input().maxValue(), invert.input().minValue());
+				input = this.builder.unary(Opcode.CLAMP, input, invert.input().minValue(), invert.input().maxValue(), 0.0F, 0.0F);
+				return this.subtract(this.builder.constant(invert.input().maxValue()), input);
 			}
 			if(noise instanceof Curve curve) {
 				return this.curve(this.compile(curve.input(), coordinates, seedOffset), curve.curveFunction());
@@ -215,7 +222,7 @@ public final class QuickNoiseGraphCompiler {
 			}
 			if(noise instanceof LegacyTemperature temperature) {
 				int value = this.builder.binary(Opcode.MULTIPLY, this.coordinateZ(coordinates), this.builder.constant(temperature.frequency()));
-				value = this.builder.unary(Opcode.SIN, value);
+				value = this.builder.unary(Opcode.RTF_SIN, value);
 				value = this.builder.unary(Opcode.CLAMP, value, -1.0F, 1.0F, 0.0F, 0.0F);
 				value = this.builder.unary(Opcode.SIGNED_POW, value, temperature.power(), 0.0F, 0.0F, 0.0F);
 				return this.map(value, -1.0F, 1.0F, 0.0F, 1.0F);
@@ -418,21 +425,15 @@ public final class QuickNoiseGraphCompiler {
 				int angle = this.builder.binary(Opcode.MULTIPLY, this.compile(direction.direction(), coordinates, seedOffset), this.builder.constant((float) (Math.PI * 2.0D)));
 				int strength = this.compile(direction.strength(), coordinates, seedOffset);
 				return new Coordinates(
-					this.builder.binary(Opcode.MULTIPLY, this.builder.unary(Opcode.SIN, angle), strength),
-					this.builder.binary(Opcode.MULTIPLY, this.builder.unary(Opcode.COS, angle), strength)
+					this.builder.binary(Opcode.MULTIPLY, this.builder.unary(Opcode.RTF_SIN, angle), strength),
+					this.builder.binary(Opcode.MULTIPLY, this.builder.unary(Opcode.RTF_COS, angle), strength)
 				);
 			}
 			throw UnsupportedGraph.INSTANCE;
 		}
 
-		private int primitive(Opcode opcode, int octaves, Coordinates coordinates, long seedOffset, float frequency, float lacunarity, float persistence, Noise range) {
-			int primitive = this.builder.primitive(opcode, octaves, coordinates.x, coordinates.z, seedOffset, frequency, lacunarity, persistence, 1.0F, 1.0F, 1.0F);
-			return this.map(primitive, -1.0F, 1.0F, range.minValue(), range.maxValue());
-		}
-
-		private int cellular(Coordinates coordinates, long seedOffset, float frequency, Noise range) {
-			int primitive = this.builder.primitive(Opcode.CELLULAR_FBM, 1, coordinates.x, coordinates.z, seedOffset, frequency, 2.0F, 0.5F, 1.0F, 1.0F, 1.0F);
-			return this.map(primitive, 0.0F, 1.0F, range.minValue(), range.maxValue());
+		private int rtfPrimitive(Opcode opcode, int octaves, Coordinates coordinates, long seedOffset, float param0, float param1, float param2, float param3, float param4, float param5) {
+			return this.builder.rtfPrimitive(opcode, octaves, this.coordinateX(coordinates), this.coordinateZ(coordinates), seedOffset, param0, param1, param2, param3, param4, param5);
 		}
 
 		private int map(int input, float inputMin, float inputMax, float outputMin, float outputMax) {
@@ -510,6 +511,32 @@ public final class QuickNoiseGraphCompiler {
 			return 2.0F;
 		}
 		throw UnsupportedGraph.INSTANCE;
+	}
+
+	private static float cellFunctionCode(CellFunction function) {
+		return switch(function) {
+			case CELL_VALUE -> 0.0F;
+			case NOISE_LOOKUP -> 1.0F;
+			case DISTANCE -> 2.0F;
+		};
+	}
+
+	private static float distanceFunctionCode(DistanceFunction function) {
+		return switch(function) {
+			case EUCLIDEAN -> 0.0F;
+			case MANHATTAN -> 1.0F;
+			case NATURAL -> 2.0F;
+		};
+	}
+
+	private static float edgeFunctionCode(EdgeFunction function) {
+		return switch(function) {
+			case DISTANCE_2 -> 0.0F;
+			case DISTANCE_2_ADD -> 1.0F;
+			case DISTANCE_2_SUB -> 2.0F;
+			case DISTANCE_2_MUL -> 3.0F;
+			case DISTANCE_2_DIV -> 4.0F;
+		};
 	}
 
 	private record Coordinates(int x, int z) {

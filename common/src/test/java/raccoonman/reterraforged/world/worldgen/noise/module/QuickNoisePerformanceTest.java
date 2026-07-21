@@ -2,10 +2,13 @@ package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Arrays;
+
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 class QuickNoisePerformanceTest {
+	private static final int BENCHMARK_ROUNDS = 7;
 	private static volatile float sink;
 
 	@Test
@@ -23,21 +26,39 @@ class QuickNoisePerformanceTest {
 			}
 		}
 
-		long legacyStart = System.nanoTime();
-		float legacy = sampleLegacy(graph, 8);
-		long legacyNanos = System.nanoTime() - legacyStart;
-		float quick;
+		long[] legacySamples = new long[BENCHMARK_ROUNDS];
+		long[] quickSamples = new long[BENCHMARK_ROUNDS];
+		float legacy = 0.0F;
+		float quick = 0.0F;
 		try(QuickNoiseRuntime.Engine engine = new QuickNoiseRuntime.Engine(); QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(engine)) {
 			QuickNoiseRuntime.prepareSample(4096, -4096);
 			graph.compute(4096.0F, -4096.0F, 0);
-			long quickStart = System.nanoTime();
-			quick = sampleQuick(graph, 8);
-			long quickNanos = System.nanoTime() - quickStart;
-			sink = legacy + quick;
-			double speedup = (double) legacyNanos / quickNanos;
-			System.out.printf("RTF_QUICK_V2_BENCH legacy_ms=%.3f quick_ms=%.3f speedup=%.3fx sink=%f%n", legacyNanos / 1_000_000.0D, quickNanos / 1_000_000.0D, speedup, sink);
-			assertTrue(speedup >= 1.5D, () -> "QUICK_V2 speedup was only " + speedup + "x");
+			for(int round = 0; round < BENCHMARK_ROUNDS; round++) {
+				if((round & 1) == 0) {
+					long start = System.nanoTime();
+					legacy = sampleLegacy(graph, 8);
+					legacySamples[round] = System.nanoTime() - start;
+					start = System.nanoTime();
+					quick = sampleQuick(graph, 8);
+					quickSamples[round] = System.nanoTime() - start;
+				} else {
+					long start = System.nanoTime();
+					quick = sampleQuick(graph, 8);
+					quickSamples[round] = System.nanoTime() - start;
+					start = System.nanoTime();
+					legacy = sampleLegacy(graph, 8);
+					legacySamples[round] = System.nanoTime() - start;
+				}
+			}
 		}
+		sink = legacy + quick;
+		Arrays.sort(legacySamples);
+		Arrays.sort(quickSamples);
+		long legacyNanos = legacySamples[BENCHMARK_ROUNDS / 2];
+		long quickNanos = quickSamples[BENCHMARK_ROUNDS / 2];
+		double speedup = (double) legacyNanos / quickNanos;
+		System.out.printf("RTF_QUICK_V2_BENCH legacy_ms=%.3f quick_ms=%.3f speedup=%.3fx legacy_range_ms=%.3f..%.3f quick_range_ms=%.3f..%.3f sink=%f%n", legacyNanos / 1_000_000.0D, quickNanos / 1_000_000.0D, speedup, legacySamples[0] / 1_000_000.0D, legacySamples[BENCHMARK_ROUNDS - 1] / 1_000_000.0D, quickSamples[0] / 1_000_000.0D, quickSamples[BENCHMARK_ROUNDS - 1] / 1_000_000.0D, sink);
+		assertTrue(speedup >= 1.5D, () -> "QUICK_V2 median speedup was only " + speedup + "x");
 	}
 
 	private static float sampleLegacy(Noise noise, int regions) {

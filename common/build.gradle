@@ -12,6 +12,7 @@ dependencies {
 	compileOnly "com.electronwill.night-config:toml:3.6.7"
 	compileOnly "org.lwjgl:lwjgl-opencl:3.3.3"
 	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 	testRuntimeOnly "org.lwjgl:lwjgl-opencl:3.3.3"
 	//compileOnly "lithostitched-forge:1.0.0"
 }

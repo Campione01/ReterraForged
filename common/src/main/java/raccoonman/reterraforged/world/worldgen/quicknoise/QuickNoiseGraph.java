@@ -7,7 +7,7 @@ import java.util.List;
 
 public final class QuickNoiseGraph {
 	private static final int MAGIC = 0x32564E51;
-	private static final int VERSION = 2;
+	private static final int VERSION = 3;
 	private static final int HEADER_BYTES = 20;
 	private static final int NODE_BYTES = 48;
 
@@ -67,6 +67,14 @@ public final class QuickNoiseGraph {
 		PERLIN_BILLOW(5),
 		PERLIN_RIDGED(6),
 		SIMPLEX_RIDGED(7),
+		RTF_PERLIN(8),
+		RTF_PERLIN2(9),
+		RTF_SIMPLEX(10),
+		RTF_SIMPLEX2(11),
+		RTF_PERLIN_RIDGE(12),
+		RTF_SIMPLEX_RIDGE(13),
+		RTF_BILLOW(14),
+		RTF_CUBIC(15),
 		ADD(16),
 		MULTIPLY(17),
 		MIN(18),
@@ -90,7 +98,12 @@ public final class QuickNoiseGraph {
 		DIVIDE(36),
 		POW_DYNAMIC(37),
 		ROUND(38),
-		GREATER_EQUAL(39);
+		GREATER_EQUAL(39),
+		RTF_WHITE(40),
+		RTF_WORLEY(41),
+		RTF_WORLEY_EDGE(42),
+		RTF_SIN(43),
+		RTF_COS(44);
 
 		private final int code;
 
@@ -121,6 +134,15 @@ public final class QuickNoiseGraph {
 				throw new IllegalArgumentException("Opcode " + opcode + " is not a QUICK_V2 primitive");
 			}
 			return this.add(opcode, octaves, coordinateX, coordinateZ, seedOffset, frequency, lacunarity, persistence, amplitude, scaleX, scaleZ);
+		}
+
+		public int rtfPrimitive(Opcode opcode, int octaves, int coordinateX, int coordinateZ, long seedOffset, float param0, float param1, float param2, float param3, float param4, float param5) {
+			if(!isRtfPrimitive(opcode)) {
+				throw new IllegalArgumentException("Opcode " + opcode + " is not an exact RTF primitive");
+			}
+			this.requireInput(coordinateX);
+			this.requireInput(coordinateZ);
+			return this.add(opcode, octaves, coordinateX, coordinateZ, seedOffset, param0, param1, param2, param3, param4, param5);
 		}
 
 		public int unary(Opcode opcode, int input) {
@@ -174,6 +196,13 @@ public final class QuickNoiseGraph {
 			if(!Float.isFinite(value)) {
 				throw new IllegalArgumentException("QUICK_V2 parameters must be finite");
 			}
+		}
+
+		private static boolean isRtfPrimitive(Opcode opcode) {
+			return switch(opcode) {
+				case RTF_PERLIN, RTF_PERLIN2, RTF_SIMPLEX, RTF_SIMPLEX2, RTF_PERLIN_RIDGE, RTF_SIMPLEX_RIDGE, RTF_BILLOW, RTF_CUBIC, RTF_WHITE, RTF_WORLEY, RTF_WORLEY_EDGE -> true;
+				default -> false;
+			};
 		}
 	}
 

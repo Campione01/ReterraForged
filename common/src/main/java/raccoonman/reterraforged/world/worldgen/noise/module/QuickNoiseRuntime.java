@@ -12,9 +12,10 @@ import org.jetbrains.annotations.Nullable;
 import raccoonman.reterraforged.world.worldgen.quicknoise.QuickNoiseNative;
 
 public final class QuickNoiseRuntime {
-	private static final int TILE_SIZE = 32;
+	private static final int TILE_BITS = 6;
+	private static final int TILE_SIZE = 1 << TILE_BITS;
 	private static final int TILE_SAMPLES = TILE_SIZE * TILE_SIZE;
-	private static final int TILE_CACHE_SIZE = 8;
+	private static final int TILE_CACHE_SIZE = 2;
 	private static final float COORDINATE_TOLERANCE = 0.001F;
 	private static final ThreadLocal<Context> CURRENT = new ThreadLocal<>();
 
@@ -23,7 +24,7 @@ public final class QuickNoiseRuntime {
 
 	static float compute(Noise noise, float x, float z, int seed) {
 		Context context = CURRENT.get();
-		return context != null && context.prepared ? context.engine.compute(noise, x, z, seed, context) : noise.computeLegacy(x, z, seed);
+		return context != null && context.prepared && !context.legacyOnly() ? context.engine.compute(noise, x, z, seed, context) : noise.computeLegacy(x, z, seed);
 	}
 
 	public static Scope bind(@Nullable Engine engine) {
@@ -99,7 +100,7 @@ public final class QuickNoiseRuntime {
 					return sampler.sample(seed, context.sampleX, context.sampleZ);
 				}
 			}
-			return noise.computeLegacy(x, z, seed);
+			return context.computeLegacy(noise, x, z, seed);
 		}
 
 		public int compiledGraphCount() {
@@ -218,8 +219,8 @@ public final class QuickNoiseRuntime {
 		}
 
 		private float sample(int seed, int sampleX, int sampleZ) {
-			int tileX = sampleX >> 5;
-			int tileZ = sampleZ >> 5;
+			int tileX = sampleX >> TILE_BITS;
+			int tileZ = sampleZ >> TILE_BITS;
 			FieldTile tile = this.tiles.get().get(this.program, seed, tileX, tileZ);
 			int localX = sampleX & (TILE_SIZE - 1);
 			int localZ = sampleZ & (TILE_SIZE - 1);
@@ -243,6 +244,7 @@ public final class QuickNoiseRuntime {
 		private float expectedZ;
 		private float xTolerance;
 		private float zTolerance;
+		private int legacyDepth;
 		private boolean prepared;
 
 		private Context(Engine engine) {
@@ -271,6 +273,19 @@ public final class QuickNoiseRuntime {
 
 		private boolean matches(float x, float z) {
 			return Math.abs(x - this.expectedX) <= this.xTolerance && Math.abs(z - this.expectedZ) <= this.zTolerance;
+		}
+
+		private boolean legacyOnly() {
+			return this.legacyDepth > 0;
+		}
+
+		private float computeLegacy(Noise noise, float x, float z, int seed) {
+			this.legacyDepth++;
+			try {
+				return noise.computeLegacy(x, z, seed);
+			} finally {
+				this.legacyDepth--;
+			}
 		}
 	}
 
