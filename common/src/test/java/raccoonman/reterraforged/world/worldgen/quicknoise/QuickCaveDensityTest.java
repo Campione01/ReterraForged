@@ -50,14 +50,42 @@ class QuickCaveDensityTest {
 		}
 	}
 
+	@Test
+	void disabledEntrancesProtectTheTerrainSurface() {
+		DensityFunction density = marker(0.0D, 0.0F).seeded(12345L);
+
+		assertTrue(surfaceContexts().stream().allMatch(context -> density.compute(context) >= 0.0D));
+	}
+
+	@Test
+	void configuredEntrancesCanOpenAtTheTerrainSurface() {
+		DensityFunction density = marker(0.0D, 1.0F).seeded(12345L);
+
+		assertTrue(surfaceContexts().stream().anyMatch(context -> density.compute(context) < 0.0D));
+	}
+
 	private static QuickCaveDensity.Marker marker() {
-		return new QuickCaveDensity.Marker(DensityFunctions.constant(4.0D), -64, 1.0F, 1.5625F, 1.0F, 1.0F, 1.0F);
+		return marker(4.0D, 1.0F);
+	}
+
+	private static QuickCaveDensity.Marker marker(double terrainDensity, float entranceProbability) {
+		return new QuickCaveDensity.Marker(DensityFunctions.constant(terrainDensity), -64, entranceProbability, 1.5625F, 1.0F, 1.0F, 1.0F);
 	}
 
 	private static List<DensityFunction.SinglePointContext> contexts() {
 		List<DensityFunction.SinglePointContext> contexts = new ArrayList<>();
 		for(int i = 0; i < 96; i++) {
 			contexts.add(new DensityFunction.SinglePointContext(-513 + i * 19, -32 + (i * 13) % 192, 777 - i * 23));
+		}
+		return contexts;
+	}
+
+	private static List<DensityFunction.SinglePointContext> surfaceContexts() {
+		List<DensityFunction.SinglePointContext> contexts = new ArrayList<>();
+		for(int z = -1024; z <= 1024; z += 64) {
+			for(int x = -1024; x <= 1024; x += 64) {
+				contexts.add(new DensityFunction.SinglePointContext(x, 64, z));
+			}
 		}
 		return contexts;
 	}

@@ -10,18 +10,24 @@ import net.minecraft.world.level.biome.Climate.Sampler;
 import net.minecraft.world.level.biome.Climate.TargetPoint;
 import raccoonman.reterraforged.world.worldgen.biome.RTFClimateSampler;
 	
-@Deprecated(forRemoval = true)
 public class SpawnFinderFix {
 	public Result result;
+	private final BlockPos searchCenter;
 
 	public SpawnFinderFix(List<ParameterPoint> list, Sampler sampler) {
-		if ((Object) sampler instanceof RTFClimateSampler rtfClimateSampler) {
-			BlockPos center = rtfClimateSampler.getSpawnSearchCenter();
+		this(list, sampler, getSearchCenter(sampler));
+	}
 
-			this.result = SpawnFinderFix.getSpawnPositionAndFitness(list, sampler, center.getX(), center.getZ());
-			this.radialSearch(list, sampler, 2048.0f, 512.0f);
-			this.radialSearch(list, sampler, 512.0f, 32.0f);
+	SpawnFinderFix(List<ParameterPoint> list, Sampler sampler, BlockPos searchCenter) {
+		this.searchCenter = searchCenter;
+		if(list.isEmpty()) {
+			this.result = new Result(searchCenter, 0L);
+			return;
 		}
+
+		this.result = SpawnFinderFix.getSpawnPositionAndFitness(list, sampler, searchCenter.getX(), searchCenter.getZ(), searchCenter);
+		this.radialSearch(list, sampler, 2048.0F, 512.0F);
+		this.radialSearch(list, sampler, 512.0F, 32.0F);
 	}
 
 	private void radialSearch(List<ParameterPoint> list, Sampler sampler, float f, float g) {
@@ -31,7 +37,7 @@ public class SpawnFinderFix {
 		while (i <= f) {
 			int j = blockPos.getX() + (int) (Math.sin(h) * (double) i);
 			Result result = SpawnFinderFix.getSpawnPositionAndFitness(list, sampler, j,
-					blockPos.getZ() + (int) (Math.cos(h) * (double) i));
+					blockPos.getZ() + (int) (Math.cos(h) * (double) i), this.searchCenter);
 			if (result.fitness() < this.result.fitness()) {
 				this.result = result;
 			}
@@ -42,10 +48,12 @@ public class SpawnFinderFix {
 		}
 	}
 
-	private static Result getSpawnPositionAndFitness(List<ParameterPoint> list, Sampler sampler, int i, int j) {
+	private static Result getSpawnPositionAndFitness(List<ParameterPoint> list, Sampler sampler, int i, int j, BlockPos searchCenter) {
 		double d = Mth.square(2500.0);
+		long relativeX = (long)i - searchCenter.getX();
+		long relativeZ = (long)j - searchCenter.getZ();
 		long l = (long) ((double) Mth.square(10000.0f)
-				* Math.pow((double) (Mth.square((long) i) + Mth.square((long) j)) / d, 2.0));
+				* Math.pow((double) (Mth.square(relativeX) + Mth.square(relativeZ)) / d, 2.0));
 		TargetPoint targetPoint = sampler.sample(QuartPos.fromBlock(i), 0, QuartPos.fromBlock(j));
 		TargetPoint targetPoint2 = new TargetPoint(targetPoint.temperature(), targetPoint.humidity(),
 				targetPoint.continentalness(), targetPoint.erosion(), 0L, targetPoint.weirdness());
@@ -54,6 +62,14 @@ public class SpawnFinderFix {
 			m = Math.min(m, parameterPoint.fitness(targetPoint2));
 		}
 		return new Result(new BlockPos(i, 0, j), l + m);
+	}
+
+	private static BlockPos getSearchCenter(Sampler sampler) {
+		if((Object)sampler instanceof RTFClimateSampler rtfClimateSampler) {
+			BlockPos center = rtfClimateSampler.getSpawnSearchCenter();
+			return center != null ? center : BlockPos.ZERO;
+		}
+		return BlockPos.ZERO;
 	}
 
 	public record Result(BlockPos location, long fitness) {

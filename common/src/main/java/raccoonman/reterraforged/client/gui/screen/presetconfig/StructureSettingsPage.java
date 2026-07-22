@@ -102,7 +102,9 @@ public class StructureSettingsPage extends PresetEditorPage {
 		Set<Holder<Biome>> overworldBiomes;
 		try {
 			overworldBiomes = dimensions.overworld().getBiomeSource().possibleBiomes();
-		} catch (NoSuchElementException e) {
+		} catch (NoSuchElementException | ClassCastException e) {
+			// Some biome-source compatibility layers require a RegistryLookup that is
+			// unavailable while the world-creation UI is still building its patch.
 			return true;
 		}
 		for(StructureSelectionEntry structureEntry : holder.value().structures()) {
