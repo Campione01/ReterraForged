@@ -7,9 +7,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 import org.apache.commons.compress.utils.FileNameUtils;
 import org.jetbrains.annotations.Nullable;
@@ -211,20 +213,25 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 	private List<PresetEntry> listPresets(Path path) throws IOException	{
 		List<PresetEntry> presets = new ArrayList<>();
 		if(Files.exists(path)) {
-			for(Path presetPath : Files.list(path)
-				.filter(Files::isRegularFile)
-				.toList()
-			) {
-				try(Reader reader = Files.newBufferedReader(presetPath)) {
-					String base = FileNameUtils.getBaseName(presetPath.toString());
-					DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
-					Optional<Error<Preset>> error = result.error();
-					if(error.isPresent()) {
-						RTFCommon.LOGGER.error(error.get().message());
-						continue;
+			try(Stream<Path> paths = Files.list(path)) {
+				for(Path presetPath : paths
+					.filter(Files::isRegularFile)
+					.filter((file) -> file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".json"))
+					.toList()
+				) {
+					try(Reader reader = Files.newBufferedReader(presetPath)) {
+						String base = FileNameUtils.getBaseName(presetPath.toString());
+						DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
+						Optional<Error<Preset>> error = result.error();
+						if(error.isPresent()) {
+							RTFCommon.LOGGER.error("Failed to decode preset {}: {}", presetPath, error.get().message());
+							continue;
+						}
+						Preset preset = result.result().orElseThrow();
+						presets.add(new PresetEntry(Component.literal(base), preset, false, this));
+					} catch(Exception exception) {
+						RTFCommon.LOGGER.error("Failed to load preset {}", presetPath, exception);
 					}
-					Preset preset = result.result().get();
-					presets.add(new PresetEntry(Component.literal(base), preset, false, this));
 				}
 			}
 		}

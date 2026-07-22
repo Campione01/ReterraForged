@@ -35,6 +35,7 @@ import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
+import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.config.PerformanceConfig;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
@@ -115,6 +116,12 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 		}
 	}
 	
+	private record PreviewContext(GeneratorContext context, BlockPos spawnCenter, boolean replacingContext) {
+	}
+
+	private record GeneratedPreview(GeneratorContext context, BlockPos spawnCenter, int centerX, int centerZ, Tile tile) {
+	}
+
 	public class Preview extends AbstractWidget {
 	    private static final int FACTOR = 4;
 	    public static final int SIZE = (1 << 4) << FACTOR;
@@ -124,15 +131,13 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	    private ResourceLocation textureId = Minecraft.getInstance().getTextureManager().register(RTFCommon.MOD_ID + "-preview-framebuffer", this.texture); 
 	    private Tile tile;
 	    private GeneratorContext generatorContext;
-	    private CompletableFuture<Tile> generationFuture;
-	    private GeneratorContext activeGenerationContext;
+	    private CompletableFuture<GeneratedPreview> generationFuture;
 	    private Levels levels;
 	    private BlockPos spawnCenter = BlockPos.ZERO;
 	    private int centerX, centerZ;
-	    private BlockPos activeSpawnCenter = BlockPos.ZERO;
-	    private int activeCenterX, activeCenterZ;
 	    private long requestedGeneration;
 	    private long activeGeneration;
+	    private boolean activeGenerationRebuildsContext;
 	    private boolean regenerationPending;
 	    private boolean rebuildContextPending;
 	    private long regenerationDeadline;
@@ -172,61 +177,86 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			}
 			this.regenerationPending = false;
 			this.rebuildContextPending = false;
-			GeneratorContext nextContext = null;
 			try {
-				nextContext = rebuildContext || this.generatorContext == null ? this.createGeneratorContext() : this.generatorContext;
-				boolean replacingContext = nextContext != this.generatorContext;
-				BlockPos nextSpawnCenter = this.spawnCenter;
+				boolean replacingContext = rebuildContext || this.generatorContext == null;
+				CompletableFuture<PreviewContext> contextFuture;
 				if(replacingContext) {
-					nextSpawnCenter = nextContext.preset.world().properties.spawnType.getSearchCenter(nextContext);
+					WorldCreationContext settings = PresetEditorPage.this.screen.getSettings();
+					RegistryAccess.Frozen registries = settings.worldgenLoadContext();
+					Preset presetSnapshot = PresetEditorPage.this.preset.getPreset().copy();
+					int seed = (int)settings.options().seed();
+					contextFuture = CompletableFuture.supplyAsync(() -> {
+						return new PreviewContext(this.createGeneratorContext(presetSnapshot, registries, seed), BlockPos.ZERO, true);
+					}, ThreadPools.WORLD_GEN);
+				} else {
+					contextFuture = CompletableFuture.completedFuture(new PreviewContext(this.generatorContext, this.spawnCenter, false));
 				}
-				this.activeGenerationContext = nextContext;
-				this.activeSpawnCenter = nextSpawnCenter;
-				this.activeCenterX = nextSpawnCenter.getX() + this.offsetX;
-				this.activeCenterZ = nextSpawnCenter.getZ() + this.offsetZ;
+
+				int requestedOffsetX = this.offsetX;
+				int requestedOffsetZ = this.offsetZ;
+				int requestedZoom = this.getZoom();
 				this.activeGeneration = this.requestedGeneration;
-				this.generationFuture = nextContext.generator.generateZoomed(this.activeCenterX, this.activeCenterZ, this.getZoom(), false);
+				this.activeGenerationRebuildsContext = replacingContext;
+				this.generationFuture = contextFuture.thenComposeAsync((previewContext) -> {
+					return this.generatePreview(previewContext, requestedOffsetX, requestedOffsetZ, requestedZoom);
+				}, ThreadPools.WORLD_GEN);
 			} catch(RuntimeException exception) {
-				if(nextContext != null && nextContext != this.generatorContext) {
-					nextContext.close();
-				}
-				this.activeGenerationContext = null;
 				RTFCommon.LOGGER.error("Failed to start the terrain preview generation", exception);
 			}
 		}
 
+		private CompletableFuture<GeneratedPreview> generatePreview(PreviewContext previewContext, int offsetX, int offsetZ, int zoom) {
+			GeneratorContext context = previewContext.context();
+			try {
+				BlockPos nextSpawnCenter = previewContext.replacingContext()
+					? context.preset.world().properties.spawnType.getSearchCenter(context)
+					: previewContext.spawnCenter();
+				int nextCenterX = nextSpawnCenter.getX() + offsetX;
+				int nextCenterZ = nextSpawnCenter.getZ() + offsetZ;
+				return context.generator.generateZoomed(nextCenterX, nextCenterZ, zoom, false).handle((tile, exception) -> {
+					if(exception != null) {
+						if(previewContext.replacingContext()) {
+							context.close();
+						}
+						throw new CompletionException(exception);
+					}
+					return new GeneratedPreview(context, nextSpawnCenter, nextCenterX, nextCenterZ, tile);
+				});
+			} catch(RuntimeException exception) {
+				if(previewContext.replacingContext()) {
+					context.close();
+				}
+				return CompletableFuture.failedFuture(exception);
+			}
+		}
+
 		private void completeGeneration() {
-			CompletableFuture<Tile> future = this.generationFuture;
+			CompletableFuture<GeneratedPreview> future = this.generationFuture;
 			if(future == null || !future.isDone()) {
 				return;
 			}
 
-			GeneratorContext completedContext = this.activeGenerationContext;
-			BlockPos completedSpawnCenter = this.activeSpawnCenter;
-			int completedCenterX = this.activeCenterX;
-			int completedCenterZ = this.activeCenterZ;
 			long completedGeneration = this.activeGeneration;
-			boolean replacingContext = completedContext != this.generatorContext;
+			boolean rebuiltContext = this.activeGenerationRebuildsContext;
 			this.generationFuture = null;
-			this.activeGenerationContext = null;
+			this.activeGenerationRebuildsContext = false;
 
-			Tile nextTile;
+			GeneratedPreview generated;
 			try {
-				nextTile = future.join();
+				generated = future.join();
 			} catch(RuntimeException exception) {
-				if(replacingContext) {
-					completedContext.close();
-					if(this.regenerationPending && !this.closed) {
-						this.rebuildContextPending = true;
-					}
+				if(rebuiltContext && this.regenerationPending && !this.closed) {
+					this.rebuildContextPending = true;
 				}
 				Throwable cause = exception instanceof CompletionException && exception.getCause() != null ? exception.getCause() : exception;
 				RTFCommon.LOGGER.error("Failed to generate the terrain preview", cause);
 				return;
 			}
 
+			GeneratorContext completedContext = generated.context();
+			boolean replacingContext = completedContext != this.generatorContext;
 			if(this.closed || completedGeneration != this.requestedGeneration) {
-				nextTile.close();
+				generated.tile().close();
 				if(replacingContext) {
 					completedContext.close();
 					if(!this.closed) {
@@ -242,11 +272,11 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 					this.generatorContext.close();
 				}
 				this.generatorContext = completedContext;
-				this.spawnCenter = completedSpawnCenter;
+				this.spawnCenter = generated.spawnCenter();
 			}
-			this.centerX = completedCenterX;
-			this.centerZ = completedCenterZ;
-			this.tile = nextTile;
+			this.centerX = generated.centerX();
+			this.centerZ = generated.centerZ();
+			this.tile = generated.tile();
 			WorldSettings.Properties properties = completedContext.preset.world().properties;
 			this.levels = new Levels(properties.terrainScaler(), properties.seaLevel);
 			if(previousTile != null) {
@@ -255,10 +285,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			this.recolor();
 		}
 
-		private GeneratorContext createGeneratorContext() {
-			WorldCreationContext settings = PresetEditorPage.this.screen.getSettings();
-	        RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-	        Preset presetSnapshot = PresetEditorPage.this.preset.getPreset().copy();
+		private GeneratorContext createGeneratorContext(Preset presetSnapshot, RegistryAccess.Frozen registries, int seed) {
 	        HolderLookup.Provider provider = presetSnapshot.buildPatch(registries);
 	        HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
 	        HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
@@ -266,7 +293,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
 				.resultOrPartial(RTFCommon.LOGGER::error)
 				.orElseGet(PerformanceConfig::makeDefault);
-			return GeneratorContext.makeUncached(preset, noises, (int)settings.options().seed(), FACTOR, 0, config.batchCount());
+			return GeneratorContext.makeUncached(preset, noises, seed, FACTOR, 0, config.batchCount());
 	    }
 
 		private void recolor() {
@@ -299,20 +326,22 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			}
 
 			GeneratorContext currentContext = this.generatorContext;
-			GeneratorContext generatingContext = this.activeGenerationContext;
-			CompletableFuture<Tile> future = this.generationFuture;
+			CompletableFuture<GeneratedPreview> future = this.generationFuture;
+			boolean rebuildingContext = this.activeGenerationRebuildsContext;
 			this.generatorContext = null;
-			this.activeGenerationContext = null;
 			this.generationFuture = null;
-			if(future != null && generatingContext != null) {
-				if(currentContext != null && currentContext != generatingContext) {
+			this.activeGenerationRebuildsContext = false;
+			if(future != null) {
+				if(rebuildingContext && currentContext != null) {
 					currentContext.close();
 				}
-				future.whenComplete((generatedTile, exception) -> {
-					if(generatedTile != null) {
-						generatedTile.close();
+				future.whenComplete((generated, exception) -> {
+					if(generated != null) {
+						generated.tile().close();
+						generated.context().close();
+					} else if(!rebuildingContext && currentContext != null) {
+						currentContext.close();
 					}
-					generatingContext.close();
 				});
 			} else if(currentContext != null) {
 				currentContext.close();
