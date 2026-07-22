@@ -33,7 +33,6 @@ The following sources informed architecture or compatibility decisions. Their so
 - Aryamaan Jain, Bernhard Kerbl, James Gain, Brandon Finley, and Guillaume Cordonnier, "FastFlow: GPU Acceleration of Flow and Depression Routing for Landscape Simulation," Computer Graphics Forum 43(7), Pacific Graphics 2024. https://www-sop.inria.fr/reves/Basilic/2024/JKGFC24/FastFlowPG2024_Author_Version.pdf
 - RelativityMC/C2ME, audited at revision `d06faf730725ac2e5874d694ccb28412eb655328`, MIT, Copyright (c) 2021-2024 ishland. https://github.com/RelativityMC/C2ME-fabric/tree/d06faf730725ac2e5874d694ccb28412eb655328
 - sempitern0/Terrainy, audited at revision `d37d969360c4c8ddbbeb3892d1f9e6dfab74b03d`, MIT. Its configuration-to-heightfield layering was evaluated; no source or binary is redistributed. https://github.com/sempitern0/Terrainy/tree/d37d969360c4c8ddbbeb3892d1f9e6dfab74b03d
-- Screaming Brain Studios, "Noise Texture Pack," CC0 1.0. It was evaluated for optional masks and visual fixtures; no texture is redistributed or sampled by world generation. https://screamingbrainstudios.itch.io/noise-texture-pack
 - Khronos OpenCL Working Group, The OpenCL Specification, Version 1.2, Document Revision 19. https://registry.khronos.org/OpenCL/specs/opencl-1.2.pdf
 - The locally supplied `VWG_C2ME_区块预生成性能根因分析.md` development report, used only to define non-blocking worker-ownership constraints and not redistributed here.
 

@@ -36,7 +36,6 @@ QUICK_V1 intentionally changes cave output and does not preserve legacy world or
 - [FastFlow: GPU Acceleration of Flow and Depression Routing for Landscape Simulation](https://www-sop.inria.fr/reves/Basilic/2024/JKGFC24/FastFlowPG2024_Author_Version.pdf) informed regular-grid batching, fused accelerator work, and transfer/synchronization boundaries. Its flow-routing algorithms and code are not included.
 - [C2ME](https://github.com/RelativityMC/C2ME-fabric/tree/d06faf730725ac2e5874d694ccb28412eb655328) informed density-function and worker-scheduling compatibility boundaries. No C2ME source, kernel, runtime, executor, or cache implementation is copied.
 - [Terrainy](https://github.com/sempitern0/Terrainy/tree/d37d969360c4c8ddbbeb3892d1f9e6dfab74b03d) informed the configuration-to-heightfield layering review. It is an MIT-licensed Godot mesh tool; no Terrainy code or runtime dependency is included.
-- [Screaming Brain Studios' Noise Texture Pack](https://screamingbrainstudios.itch.io/noise-texture-pack) was evaluated as a CC0 source for optional masks and visual fixtures. No texture from the pack is bundled or sampled by world generation.
 - The [Khronos OpenCL 1.2 specification](https://registry.khronos.org/OpenCL/specs/opencl-1.2.pdf) defines the compute API and language targeted by the original RTF kernel.
 - LWJGL OpenCL 3.3.3 is distributed as a loader-deduplicatable nested dependency under BSD-3-Clause.
 

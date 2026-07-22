@@ -138,7 +138,3 @@ the CPU structural path.
   (MIT) is a Godot/FastNoiseLite mesh tool. Its configuration-to-heightfield
   layering is a useful conceptual reference, but its point-sampled mesh path is
   not a runtime dependency or performance backend for QUICK_V2. No code is copied.
-- Screaming Brain Studios' CC0 Noise Texture Pack is suitable for optional UI,
-  masks, or visual test material. Fixed textures are excluded from core world
-  generation to avoid periodic repetition, seed limitations, and memory-bandwidth
-  costs; no texture is bundled or sampled by QUICK_V2.
