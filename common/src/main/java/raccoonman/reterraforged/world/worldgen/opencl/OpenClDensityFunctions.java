@@ -14,19 +14,31 @@ public final class OpenClDensityFunctions {
 
 	@Nullable
 	public static DensityFunction wrapFinalDensity(DensityFunction density) {
+		return wrapFinalDensity(density, true);
+	}
+
+	@Nullable
+	static DensityFunction wrapFinalDensityAllowingCpuInputs(DensityFunction density) {
+		return wrapFinalDensity(density, false);
+	}
+
+	@Nullable
+	private static DensityFunction wrapFinalDensity(DensityFunction density, boolean selfContainedOnly) {
 		AtomicInteger candidates = new AtomicInteger();
-		OpenClDensityGroup group = new OpenClDensityGroup();
+		OpenClDensityGroup group = new OpenClDensityGroup(selfContainedOnly);
 		DensityFunction mapped = density.mapAll(new DensityFunction.Visitor() {
 			@Override
 			public DensityFunction apply(DensityFunction function) {
 				if(function instanceof DensityFunctions.Marker marker
 					&& marker.type() == DensityFunctions.Marker.Type.Interpolated
 					&& !(marker.wrapped() instanceof OpenClDensityFunction)) {
-					return OpenClGraphCompiler.compile(marker.wrapped()).map(template -> {
-						int slot = group.add(marker.wrapped());
-						candidates.incrementAndGet();
-						return DensityFunctions.interpolated(new OpenClDensityFunction(marker.wrapped(), group, slot));
-					}).orElse(function);
+					return OpenClGraphCompiler.compile(marker.wrapped())
+						.filter(template -> !selfContainedOnly || template.inputCount() == 0)
+						.map(template -> {
+							int slot = group.add(marker.wrapped());
+							candidates.incrementAndGet();
+							return DensityFunctions.interpolated(new OpenClDensityFunction(marker.wrapped(), group, slot));
+						}).orElse(function);
 				}
 				return function;
 			}

@@ -1,6 +1,8 @@
 package raccoonman.reterraforged.world.worldgen.densityfunction.tile.generation;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CancellationException;
+import java.util.function.BooleanSupplier;
 
 import org.jetbrains.annotations.Nullable;
 
@@ -108,6 +110,10 @@ public class TileGenerator {
 	}
 	
 	public CompletableFuture<Tile> generateZoomed(float centerX, float centerZ, float zoom, boolean applyOptionalFilters) {
+		return this.generateZoomed(centerX, centerZ, zoom, applyOptionalFilters, () -> false);
+	}
+
+	public CompletableFuture<Tile> generateZoomed(float centerX, float centerZ, float zoom, boolean applyOptionalFilters, BooleanSupplier cancelled) {
 		Tile tile = this.makeTile(0, 0);
 		CompletableFuture<?>[] futures = new CompletableFuture<?>[this.batchCount * this.batchCount];
 		float translateX = centerX - this.tileSizeBlocks.size() * zoom / 2.0F;
@@ -117,16 +123,19 @@ public class TileGenerator {
 				int chunkX = batchX * this.batchSize;
 				int chunkZ = batchZ * this.batchSize;
 				futures[batchX * this.batchCount + batchZ] = CompletableFuture.runAsync(() -> {
+					throwIfCancelled(cancelled);
 					try (NoiseRootRuntime.Scope ignored = NoiseRootRuntime.bind(this.noiseEngine)) {
 						try {
 							int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
 							int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
 							for (int cZ = chunkZ; cZ < maxZ; cZ++) {
+								throwIfCancelled(cancelled);
 								for (int cX = chunkX; cX < maxX; cX++) {
 									Chunk chunk = tile.getChunkWriter(cX, cZ);
 
 									Rivermap rivers = null;
 									for (int dz = 0; dz < 16; dz++) {
+										throwIfCancelled(cancelled);
 										for (int dx = 0; dx < 16; dx++) {
 											int sampleX = chunk.getBlockX() + dx;
 											int sampleZ = chunk.getBlockZ() + dz;
@@ -152,11 +161,16 @@ public class TileGenerator {
 			}
 		}
 		return CompletableFuture.allOf(futures).thenApply((v) -> {
+			throwIfCancelled(cancelled);
 			if(this.noiseEngine != null) {
 				this.noiseEngine.afterTileGeneration();
 			}
 			this.filters.apply(tile, applyOptionalFilters);
 			return tile;
+		}).whenComplete((result, exception) -> {
+			if(exception != null) {
+				tile.close();
+			}
 		});
 	}
     
@@ -171,4 +185,10 @@ public class TileGenerator {
         }
         return batchSize;
     }
+
+	private static void throwIfCancelled(BooleanSupplier cancelled) {
+		if(cancelled.getAsBoolean()) {
+			throw new CancellationException("Terrain preview generation was superseded");
+		}
+	}
 }

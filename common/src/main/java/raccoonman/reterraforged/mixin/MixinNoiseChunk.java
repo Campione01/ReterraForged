@@ -26,8 +26,6 @@ import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
-import raccoonman.reterraforged.world.worldgen.opencl.OpenClDensityFunctions;
-import raccoonman.reterraforged.world.worldgen.opencl.OpenClManager;
 
 @Mixin(NoiseChunk.class)
 class MixinNoiseChunk {
@@ -75,10 +73,6 @@ class MixinNoiseChunk {
 				generatorContext.cache.queueAtChunk(this.chunkX, this.chunkZ);
 			}
 			this.chunk = generatorContext.cache.provideAtChunk(this.chunkX, this.chunkZ).getChunkReader(this.chunkX, this.chunkZ);
-			DensityFunction openClFinalDensity = rtfRandomState.openClFinalDensity();
-			if(openClFinalDensity != null && OpenClManager.isAvailable()) {
-				router = OpenClDensityFunctions.withFinalDensity(router, openClFinalDensity);
-			}
 		}
 		this.cache2d = new CellSampler.Cache2d();
 		return router;

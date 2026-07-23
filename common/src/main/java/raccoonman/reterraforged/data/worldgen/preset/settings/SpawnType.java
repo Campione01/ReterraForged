@@ -1,8 +1,10 @@
 package raccoonman.reterraforged.data.worldgen.preset.settings;
 
 import java.util.List;
+import java.util.Locale;
 
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.DataResult;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -53,7 +55,7 @@ public enum SpawnType implements StringRepresentable {
 		}
 	};
 	
-	public static final Codec<SpawnType> CODEC = StringRepresentable.fromEnum(SpawnType::values);
+	public static final Codec<SpawnType> CODEC = Codec.STRING.comapFlatMap(SpawnType::decode, SpawnType::getSerializedName);
 	private static final Climate.Parameter FULL_RANGE = Climate.Parameter.span(-1.0F, 1.0F);
 	private static final Climate.Parameter SURFACE_DEPTH = Climate.Parameter.point(0.0F);
 	private static final Climate.Parameter INLAND_CONTINENTALNESS = Climate.Parameter.span(-0.11F, 0.55F);
@@ -69,6 +71,19 @@ public enum SpawnType implements StringRepresentable {
 	@Override
 	public String getSerializedName() {
 		return this.name;
+	}
+
+	private static DataResult<SpawnType> decode(String name) {
+		String normalized = name.toUpperCase(Locale.ROOT);
+		if(normalized.equals("USER_SELECTED")) {
+			return DataResult.success(CONTINENT_CENTER);
+		}
+		for(SpawnType type : values()) {
+			if(type.getSerializedName().equals(normalized)) {
+				return DataResult.success(type);
+			}
+		}
+		return DataResult.error(() -> "Unknown element name:" + name);
 	}
 	
 	public abstract BlockPos getSearchCenter(GeneratorContext ctx);

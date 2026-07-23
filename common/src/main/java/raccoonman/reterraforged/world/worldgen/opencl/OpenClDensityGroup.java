@@ -13,6 +13,7 @@ import net.minecraft.world.level.levelgen.DensityFunction;
 final class OpenClDensityGroup {
 	private static final ThreadLocal<Cycle> ACTIVE_CYCLE = new ThreadLocal<>();
 
+	private final boolean selfContainedOnly;
 	private final List<DensityFunction> pending = new ArrayList<>();
 	private final Map<DensityFunction.Visitor, Mapping> mappings = new WeakHashMap<>();
 	@Nullable
@@ -20,10 +21,12 @@ final class OpenClDensityGroup {
 	@Nullable
 	private volatile OpenClKernelTemplate template;
 
-	OpenClDensityGroup() {
+	OpenClDensityGroup(boolean selfContainedOnly) {
+		this.selfContainedOnly = selfContainedOnly;
 	}
 
-	private OpenClDensityGroup(int outputCount) {
+	private OpenClDensityGroup(int outputCount, boolean selfContainedOnly) {
+		this.selfContainedOnly = selfContainedOnly;
 		this.delegates = new DensityFunction[outputCount];
 	}
 
@@ -42,7 +45,9 @@ final class OpenClDensityGroup {
 		}
 		this.delegates = this.pending.toArray(DensityFunction[]::new);
 		this.pending.clear();
-		this.template = OpenClGraphCompiler.compile(Arrays.asList(this.delegates)).orElse(null);
+		this.template = OpenClGraphCompiler.compile(Arrays.asList(this.delegates))
+			.filter(this::accepts)
+			.orElse(null);
 		return this.template != null;
 	}
 
@@ -59,17 +64,27 @@ final class OpenClDensityGroup {
 	}
 
 	boolean fill(int slot, DensityFunction delegate, double[] output, DensityFunction.ContextProvider contextProvider) {
+		OpenClKernelTemplate currentTemplate = this.template;
+		DensityFunction[] currentDelegates = this.delegates;
+		if(currentTemplate == null || currentDelegates == null || slot < 0 || slot >= currentDelegates.length || !OpenClManager.canUse(currentTemplate)) {
+			ACTIVE_CYCLE.remove();
+			return false;
+		}
+
+		OpenClKernelTemplate.Batch batch;
+		try {
+			batch = currentTemplate.collect(contextProvider, output.length);
+		} catch(RuntimeException e) {
+			ACTIVE_CYCLE.remove();
+			OpenClManager.recordCollectionFailure(currentTemplate, e);
+			return false;
+		}
+
 		Cycle active = ACTIVE_CYCLE.get();
-		if(active != null && active.matches(this, contextProvider, output.length, slot)) {
+		if(active != null && active.matches(this, batch, output.length, slot)) {
 			return active.consume(slot, delegate, output, contextProvider);
 		}
 		ACTIVE_CYCLE.remove();
-
-		OpenClKernelTemplate currentTemplate = this.template;
-		DensityFunction[] currentDelegates = this.delegates;
-		if(currentTemplate == null || currentDelegates == null || slot >= currentDelegates.length || !OpenClManager.canUse(currentTemplate)) {
-			return false;
-		}
 
 		boolean verify = OpenClManager.requiresVerification(currentTemplate);
 		double[] firstExpected = null;
@@ -78,21 +93,16 @@ final class OpenClDensityGroup {
 			delegate.fillArray(firstExpected, contextProvider);
 		}
 
-		double[] accelerated = null;
-		boolean failed = false;
-		try {
-			OpenClKernelTemplate.Batch batch = currentTemplate.collect(contextProvider, output.length);
-			accelerated = new double[output.length * currentTemplate.outputCount()];
-			if(!OpenClManager.executeUnchecked(currentTemplate, batch, accelerated)) {
-				accelerated = null;
-				failed = true;
+		double[] accelerated = new double[output.length * currentTemplate.outputCount()];
+		if(!OpenClManager.executeUnchecked(currentTemplate, batch, accelerated)) {
+			if(firstExpected != null) {
+				System.arraycopy(firstExpected, 0, output, 0, output.length);
+				return true;
 			}
-		} catch(RuntimeException e) {
-			OpenClManager.recordCollectionFailure(currentTemplate, e);
-			failed = true;
+			return false;
 		}
 
-		Cycle cycle = new Cycle(this, currentTemplate, contextProvider, output.length, accelerated, verify, failed, slot, firstExpected);
+		Cycle cycle = new Cycle(this, currentTemplate, batch, output.length, accelerated, verify, slot, firstExpected);
 		ACTIVE_CYCLE.set(cycle);
 		return cycle.consume(slot, delegate, output, contextProvider);
 	}
@@ -102,12 +112,16 @@ final class OpenClDensityGroup {
 		return currentTemplate == null ? "none" : currentTemplate.id().substring(0, 12) + "/" + currentTemplate.outputCount();
 	}
 
+	private boolean accepts(OpenClKernelTemplate template) {
+		return !this.selfContainedOnly || template.inputCount() == 0;
+	}
+
 	private final class Mapping {
 		private final OpenClDensityGroup group;
 		private int count;
 
 		private Mapping(int outputCount) {
-			this.group = new OpenClDensityGroup(outputCount);
+			this.group = new OpenClDensityGroup(outputCount, OpenClDensityGroup.this.selfContainedOnly);
 		}
 
 		private void add(int slot, DensityFunction delegate) {
@@ -118,7 +132,9 @@ final class OpenClDensityGroup {
 			mappedDelegates[slot] = delegate;
 			this.count++;
 			if(this.count == mappedDelegates.length) {
-				this.group.template = OpenClGraphCompiler.compile(Arrays.asList(mappedDelegates)).orElse(null);
+				this.group.template = OpenClGraphCompiler.compile(Arrays.asList(mappedDelegates))
+					.filter(this.group::accepts)
+					.orElse(null);
 			}
 		}
 	}
@@ -126,7 +142,7 @@ final class OpenClDensityGroup {
 	private static final class Cycle {
 		private final OpenClDensityGroup group;
 		private final OpenClKernelTemplate template;
-		private final DensityFunction.ContextProvider contextProvider;
+		private final OpenClKernelTemplate.Batch batch;
 		private final int size;
 		@Nullable
 		private final double[] accelerated;
@@ -138,23 +154,22 @@ final class OpenClDensityGroup {
 		private int consumedCount;
 		private boolean failed;
 
-		private Cycle(OpenClDensityGroup group, OpenClKernelTemplate template, DensityFunction.ContextProvider contextProvider, int size,
-			@Nullable double[] accelerated, boolean verification, boolean failed, int firstSlot, @Nullable double[] firstExpected) {
+		private Cycle(OpenClDensityGroup group, OpenClKernelTemplate template, OpenClKernelTemplate.Batch batch, int size,
+			double[] accelerated, boolean verification, int firstSlot, @Nullable double[] firstExpected) {
 			this.group = group;
 			this.template = template;
-			this.contextProvider = contextProvider;
+			this.batch = batch;
 			this.size = size;
 			this.accelerated = accelerated;
 			this.verification = verification;
-			this.failed = failed;
 			this.consumed = new boolean[template.outputCount()];
 			this.firstSlot = firstSlot;
 			this.firstExpected = firstExpected;
 		}
 
-		private boolean matches(OpenClDensityGroup group, DensityFunction.ContextProvider contextProvider, int size, int slot) {
-			return this.group == group && this.contextProvider == contextProvider && this.size == size && slot >= 0
-				&& slot < this.consumed.length && !this.consumed[slot];
+		private boolean matches(OpenClDensityGroup group, OpenClKernelTemplate.Batch batch, int size, int slot) {
+			return this.group == group && this.size == size && slot >= 0
+				&& slot < this.consumed.length && !this.consumed[slot] && this.batch.matches(batch);
 		}
 
 		private boolean consume(int slot, DensityFunction delegate, double[] output, DensityFunction.ContextProvider contextProvider) {

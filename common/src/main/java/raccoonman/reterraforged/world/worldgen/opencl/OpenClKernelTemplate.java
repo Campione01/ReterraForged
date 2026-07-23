@@ -63,5 +63,18 @@ final class OpenClKernelTemplate {
 	}
 
 	record Batch(int[] coordinates, double[] inputs, int size) {
+		boolean matches(Batch other) {
+			if(this.size != other.size || !java.util.Arrays.equals(this.coordinates, other.coordinates)
+				|| this.inputs.length != other.inputs.length
+			) {
+				return false;
+			}
+			for(int i = 0; i < this.inputs.length; i++) {
+				if(Double.doubleToRawLongBits(this.inputs[i]) != Double.doubleToRawLongBits(other.inputs[i])) {
+					return false;
+				}
+			}
+			return true;
+		}
 	}
 }

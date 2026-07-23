@@ -54,11 +54,16 @@ class OpenClGraphCompilerTest {
 		assertEquals(2, template.inputCount());
 		assertTrue(template.source().contains("__kernel void rtf_density"));
 		assertTrue(template.source().contains("rtf_improved"));
-		assertNotNull(OpenClDensityFunctions.wrapFinalDensity(DensityFunctions.interpolated(supported)));
+		DensityFunction productionWrapped = OpenClDensityFunctions.wrapFinalDensity(DensityFunctions.interpolated(supported));
+		DensityFunction unrestrictedWrapped = OpenClDensityFunctions.wrapFinalDensityAllowingCpuInputs(DensityFunctions.interpolated(supported));
+		assertNotNull(productionWrapped);
+		assertNotNull(unrestrictedWrapped);
+		assertEquals(1, countOpenClFunctions(productionWrapped));
+		assertEquals(2, countOpenClFunctions(unrestrictedWrapped));
 
 		DensityFunction unknown = new UnknownDensityFunction();
 		assertFalse(OpenClGraphCompiler.compile(DensityFunctions.add(supported, unknown)).isPresent());
-		assertEquals(null, OpenClDensityFunctions.wrapFinalDensity(DensityFunctions.interpolated(unknown)));
+		assertNull(OpenClDensityFunctions.wrapFinalDensity(DensityFunctions.interpolated(unknown)));
 	}
 
 	@Test
@@ -117,6 +122,39 @@ class OpenClGraphCompilerTest {
 	}
 
 	@Test
+	void collectedBatchRejectsReusedMutableProviderAtDifferentCoordinates() {
+		OpenClKernelTemplate template = OpenClGraphCompiler.compile(supportedGraph()).orElseThrow();
+		AtomicInteger offset = new AtomicInteger();
+		DensityFunction.ContextProvider provider = new DensityFunction.ContextProvider() {
+			@Override
+			public DensityFunction.FunctionContext forIndex(int index) {
+				return new DensityFunction.SinglePointContext(offset.get() + index, 64 - index, 200 + index);
+			}
+
+			@Override
+			public void fillAllDirectly(double[] values, DensityFunction function) {
+				for(int i = 0; i < values.length; i++) {
+					values[i] = function.compute(this.forIndex(i));
+				}
+			}
+		};
+
+		OpenClKernelTemplate.Batch batch = template.collect(provider, 8);
+		OpenClKernelTemplate.Batch same = template.collect(provider, 8);
+		assertTrue(batch.matches(same));
+		offset.set(16);
+		OpenClKernelTemplate.Batch moved = template.collect(provider, 8);
+		assertFalse(batch.matches(moved));
+	}
+
+	@Test
+	void collectedBatchMatchesCpuInputsByRawDoubleBits() {
+		OpenClKernelTemplate.Batch positiveZero = new OpenClKernelTemplate.Batch(new int[] { 1, 2, 3 }, new double[] { 0.0D }, 1);
+		OpenClKernelTemplate.Batch negativeZero = new OpenClKernelTemplate.Batch(new int[] { 1, 2, 3 }, new double[] { -0.0D }, 1);
+		assertFalse(positiveZero.matches(negativeZero));
+	}
+
+	@Test
 	void discoversCandidatesInTheSeededRtfCaveGraph() {
 		HolderLookup.Provider vanilla = VanillaRegistries.createLookup();
 		HolderGetter<DensityFunction> densityFunctions = vanilla.lookupOrThrow(Registries.DENSITY_FUNCTION);
@@ -165,7 +203,7 @@ class OpenClGraphCompilerTest {
 				return function;
 			}
 		});
-		assertEquals(6, candidates.get());
+		assertEquals(5, candidates.get());
 	}
 
 	@Test
@@ -220,6 +258,20 @@ class OpenClGraphCompilerTest {
 			),
 			DensityFunctions.constant(-0.4)
 		).squeeze();
+	}
+
+	private static int countOpenClFunctions(DensityFunction function) {
+		AtomicInteger count = new AtomicInteger();
+		function.mapAll(new DensityFunction.Visitor() {
+			@Override
+			public DensityFunction apply(DensityFunction candidate) {
+				if(candidate instanceof OpenClDensityFunction) {
+					count.incrementAndGet();
+				}
+				return candidate;
+			}
+		});
+		return count.get();
 	}
 
 	private static List<DensityFunction.SinglePointContext> contexts() {

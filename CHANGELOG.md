@@ -1,5 +1,24 @@
 # Change Log
 
+## 2026-07-23 - Preset editor and density correctness
+
+### Fixed
+
+- Restored loading for presets that still encode the legacy `USER_SELECTED` spawn type or `UPLIFT` continent type, while keeping current names on save.
+- Cached preset decode results by exact modification time and size so an unchanged invalid file is reported once instead of being reparsed on every page rebuild.
+- Bounded preview generation to four cancellable jobs, debounced slider regeneration, discarded superseded work, and closed failed preview tiles.
+- Limited the structure page to verified overworld random-spread sets, bounded long labels, and completed preview click/drag/release forwarding so the preview cannot capture unrelated slider drags.
+- Preserved the real source path of presets loaded from the legacy config directory and de-duplicated same-name legacy/current entries, fixing edits and deletes targeting the wrong file.
+- Replaced OpenCL density-cycle reuse based on mutable provider identity with exact XYZ and raw CPU-input batch matching. Changed batches now execute afresh or fall back to CPU.
+- Withdrew the generic `LEGACY`/`LEGACY_V2` final-density OpenCL path after full-world client tests proved that first-batch kernel verification was insufficient to guarantee world parity. These cave modes now use the CPU backend even when OpenCL is enabled; the independently verified complete-tile `QUICK_V1` GPU backend remains available.
+
+### Validation
+
+- Added full-preset legacy decode coverage and mutable `NoiseChunk` batch regression tests.
+- Verified Quick V2 against Legacy at the reported coordinates and seed across adjacent production tiles and the complete cached `CellSampler` path, including tile seams.
+- Verified the unchanged strata resources and rules against the baseline; the reported layer distortion was a downstream exposure of incorrect solid/air geometry rather than a separate strata algorithm change.
+- Repeated fixed-seed, fixed-spawn client generation in `OFF/ON/ON/OFF` order with C2ME: all terrain-core, heightmap, underground, strata, biome, and structure comparisons stayed within the independent repeat-run floor after the safe Legacy V2 CPU fallback.
+
 ## 2026-07-22 - QUICK_V2 legacy semantic parity
 
 ### Fixed

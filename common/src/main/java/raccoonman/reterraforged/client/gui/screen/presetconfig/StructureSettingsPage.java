@@ -1,5 +1,7 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
@@ -10,6 +12,8 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.RegistryAccess;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.tags.BiomeTags;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.levelgen.WorldDimensions;
 import net.minecraft.world.level.levelgen.structure.Structure;
@@ -46,18 +50,26 @@ public class StructureSettingsPage extends PresetEditorPage {
 		WorldCreationContext settings = this.screen.getSettings();
 		RegistryAccess.Frozen registries = settings.worldgenLoadContext();
 		
+		Set<ResourceKey<StructureSet>> visibleStructureSets = new HashSet<>();
 		registries.lookupOrThrow(Registries.STRUCTURE_SET).listElements().filter((holder) -> {
-			return isOverworldStructureSet(settings.selectedDimensions(), holder);
+			return isOverworldStructureSet(settings.selectedDimensions(), holder)
+				&& holder.value().placement() instanceof RandomSpreadStructurePlacement;
 		}).forEach((holder) -> {
 			StructureSet set = holder.value();
 			if(set.placement() instanceof RandomSpreadStructurePlacement placement) {
+				visibleStructureSets.add(holder.key());
 				structures.entries.computeIfAbsent(holder.key(), (k) -> {
 					return new StructureSetEntry(placement.spacing(), placement.separation(), placement.salt(), false);
 				});
 			}
 		});
 		
-		structures.entries.forEach((key, entry) -> {
+		structures.entries.entrySet().stream()
+			.filter((entry) -> visibleStructureSets.contains(entry.getKey()))
+			.sorted(Comparator.comparing((entry) -> entry.getKey().location().toString()))
+			.forEach((mapEntry) -> {
+			ResourceKey<StructureSet> key = mapEntry.getKey();
+			StructureSetEntry entry = mapEntry.getValue();
 			class SliderHolder {
 				Slider slider;
 			}
@@ -104,8 +116,16 @@ public class StructureSettingsPage extends PresetEditorPage {
 			overworldBiomes = dimensions.overworld().getBiomeSource().possibleBiomes();
 		} catch (NoSuchElementException | ClassCastException e) {
 			// Some biome-source compatibility layers require a RegistryLookup that is
-			// unavailable while the world-creation UI is still building its patch.
-			return true;
+			// unavailable while the world-creation UI is still building its patch. In
+			// that case only expose sets with an explicit overworld biome tag.
+			for(StructureSelectionEntry structureEntry : holder.value().structures()) {
+				for(Holder<Biome> biome : structureEntry.structure().value().biomes()) {
+					if(biome.is(BiomeTags.IS_OVERWORLD)) {
+						return true;
+					}
+				}
+			}
+			return false;
 		}
 		for(StructureSelectionEntry structureEntry : holder.value().structures()) {
 			Structure structure = structureEntry.structure().value();

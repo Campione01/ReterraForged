@@ -27,6 +27,7 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.config.PerformanceConfig;
 import raccoonman.reterraforged.data.worldgen.compat.terrablender.TBNoiseRouterData;
+import raccoonman.reterraforged.data.worldgen.preset.settings.CaveSettings.DensityAlgorithm;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.tags.RTFDensityFunctionTags;
@@ -36,7 +37,6 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
-import raccoonman.reterraforged.world.worldgen.opencl.OpenClDensityFunctions;
 import raccoonman.reterraforged.world.worldgen.opencl.OpenClManager;
 import raccoonman.reterraforged.world.worldgen.quicknoise.QuickCaveDensity;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
@@ -59,8 +59,6 @@ class MixinRandomState {
 	private GeneratorContext generatorContext;
 	@Nullable
 	private Preset preset;
-	@Nullable
-	private DensityFunction openClFinalDensity;
 	
 	private long seed;
 	private NoiseGeneratorSettings noiseGeneratorSettings;
@@ -101,11 +99,7 @@ class MixinRandomState {
 	            return visitor.visitNoise(noiseHolder);
 	        }
 		};
-		NoiseRouter mapped = router.mapAll(this.densityFunctionWrapper);
-		if(this.hasContext && OpenClManager.isEnabledByConfig()) {
-			this.openClFinalDensity = OpenClDensityFunctions.wrapFinalDensity(mapped.finalDensity());
-		}
-		return mapped;
+		return router.mapAll(this.densityFunctionWrapper);
 	}
 
 	public void reterraforged$RTFRandomState$initialize(ServerLevel level) {
@@ -133,6 +127,12 @@ class MixinRandomState {
 		
 		presets.get(Preset.KEY).ifPresentOrElse((presetHolder) -> {
 			this.preset = presetHolder.value();
+			if(OpenClManager.isEnabledByConfig() && this.preset.caves().densityAlgorithm != DensityAlgorithm.QUICK_V1) {
+				RTFCommon.LOGGER.info(
+					"RTF OpenCL final-density acceleration is disabled for {} until full-world CPU parity is established; using the CPU cave backend",
+					this.preset.caves().densityAlgorithm
+				);
+			}
 
 			if(this.hasContext) {
 				PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
@@ -145,9 +145,6 @@ class MixinRandomState {
 //				throw new IllegalStateException("Missing preset!");
 			}
 		});
-		if(this.generatorContext != null && this.openClFinalDensity != null) {
-			OpenClManager.initialize();
-		}
 	}
 	
 	@Nullable
@@ -158,11 +155,6 @@ class MixinRandomState {
 	@Nullable
 	public GeneratorContext reterraforged$RTFRandomState$generatorContext() {
 		return this.generatorContext;
-	}
-
-	@Nullable
-	public DensityFunction reterraforged$RTFRandomState$openClFinalDensity() {
-		return this.openClFinalDensity;
 	}
 
 	@Nullable
@@ -181,6 +173,5 @@ class MixinRandomState {
 		this.hasContext = false;
 		this.generatorContext = null;
 		this.preset = null;
-		this.openClFinalDensity = null;
 	}
 }

@@ -39,6 +39,7 @@ import net.minecraft.core.HolderGetter;
 import net.minecraft.core.MappedRegistry;
 import net.minecraft.core.RegistrationInfo;
 import net.minecraft.server.Bootstrap;
+import net.minecraft.world.level.levelgen.DensityFunction;
 import net.neoforged.fml.loading.LoadingModList;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.RenderMode;
 import raccoonman.reterraforged.concurrent.SimpleResource;
@@ -59,6 +60,7 @@ import raccoonman.reterraforged.world.worldgen.cell.terrain.Terrain;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainCategory;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.cell.terrain.fakewater.FakeWaterBiomeTarget;
+import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Size;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.filter.BeachDetect;
@@ -345,6 +347,169 @@ class RtfSemanticParityTest {
 		}
 		System.out.println("RTF_PRODUCTION_TILE_PROFILE " + profilePath.toAbsolutePath());
 		assertTrue(failures.isEmpty(), () -> "Production tile found QUICK_V2 root mismatches: " + failures);
+	}
+
+	@Test
+	void quickV2MatchesLegacyForPlayerReportedProductionTile() throws Exception {
+		String externalPreset = System.getenv("RTF_PARITY_PRESET");
+		Assumptions.assumeTrue(externalPreset != null && !externalPreset.isBlank());
+		LoadingModList.of(List.of(), List.of(), List.of(), List.of(), Map.of());
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+
+		Preset source = loadPreset(Path.of(externalPreset));
+		Preset legacyPreset = source.copy();
+		legacyPreset.world().noiseEngine = WorldSettings.NoiseEngine.LEGACY;
+		Preset quickPreset = source.copy();
+		quickPreset.world().noiseEngine = WorldSettings.NoiseEngine.QUICK_V2;
+
+		int factor = 3;
+		int border = productionBorder(source);
+		int tileBlockSize = Size.blocks(factor, 0).size();
+		int tileX = Math.floorDiv(5_312, tileBlockSize);
+		int tileZ = Math.floorDiv(15_146, tileBlockSize);
+		int centerX = tileX * tileBlockSize + tileBlockSize / 2;
+		int centerZ = tileZ * tileBlockSize + tileBlockSize / 2;
+
+		try(
+			GeneratorContext legacy = GeneratorContext.makeUncached(legacyPreset, noiseLookup(legacyPreset), WORLD_SEED, factor, border, 6);
+			GeneratorContext quick = GeneratorContext.makeUncached(quickPreset, noiseLookup(quickPreset), WORLD_SEED, factor, border, 6);
+			Tile legacyTile = legacy.generator.generate(tileX, tileZ).join();
+			Tile quickTile = quick.generator.generate(tileX, tileZ).join()
+		) {
+			Frame expected = captureTile(legacyTile, legacy, centerX, centerZ);
+			Frame actual = captureTile(quickTile, quick, centerX, centerZ);
+			for(ContinuousField field : ContinuousField.values()) {
+				FieldReport report = compareField(field, expected.values.get(field), actual.values.get(field), expected);
+				assertEquals(0L, report.bitMismatches(), () -> "Player production tile diverged in " + field.fileName + ": " + report.firstMismatch());
+			}
+			DiscreteReport discrete = compareDiscrete(expected, actual);
+			assertEquals(0, discrete.totalMismatches(), () -> "Player production tile discrete fields diverged: " + discrete);
+		}
+	}
+
+	@Test
+	void quickV2MatchesLegacyAcrossAdjacentProductionTiles() {
+		LoadingModList.of(List.of(), List.of(), List.of(), List.of(), Map.of());
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+
+		int factor = 3;
+		Preset source = Presets.makeRTFDefault();
+		int border = productionBorder(source);
+		int tileBlockSize = Size.blocks(factor, 0).size();
+		int originTileX = Math.floorDiv(5_312, tileBlockSize);
+		int originTileZ = Math.floorDiv(15_146, tileBlockSize);
+
+		for(int seed : List.of(WORLD_SEED, -828_453_099, -1_448_906_188)) {
+			Preset legacyPreset = source.copy();
+			legacyPreset.world().noiseEngine = WorldSettings.NoiseEngine.LEGACY;
+			Preset quickPreset = source.copy();
+			quickPreset.world().noiseEngine = WorldSettings.NoiseEngine.QUICK_V2;
+			try(
+				GeneratorContext legacy = GeneratorContext.makeUncached(legacyPreset, noiseLookup(legacyPreset), seed, factor, border, 6);
+				GeneratorContext quick = GeneratorContext.makeUncached(quickPreset, noiseLookup(quickPreset), seed, factor, border, 6)
+			) {
+				for(int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+					for(int offsetX = -1; offsetX <= 1; offsetX++) {
+						int tileX = originTileX + offsetX;
+						int tileZ = originTileZ + offsetZ;
+						int centerX = tileX * tileBlockSize + tileBlockSize / 2;
+						int centerZ = tileZ * tileBlockSize + tileBlockSize / 2;
+						try(
+							Tile legacyTile = legacy.generator.generate(tileX, tileZ).join();
+							Tile quickTile = quick.generator.generate(tileX, tileZ).join()
+						) {
+							Frame expected = captureTile(legacyTile, legacy, centerX, centerZ);
+							Frame actual = captureTile(quickTile, quick, centerX, centerZ);
+							for(ContinuousField field : ContinuousField.values()) {
+								FieldReport report = compareField(field, expected.values.get(field), actual.values.get(field), expected);
+								assertEquals(0L, report.bitMismatches(), () -> "Adjacent production tile diverged for seed=" + seed
+									+ ", tile=" + tileX + "," + tileZ + ", field=" + field.fileName + ": " + report.firstMismatch());
+							}
+							DiscreteReport discrete = compareDiscrete(expected, actual);
+							assertEquals(0, discrete.totalMismatches(), () -> "Adjacent production tile discrete fields diverged for seed="
+								+ seed + ", tile=" + tileX + "," + tileZ + ": " + discrete);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	@Test
+	void cachedCellSamplerMatchesLegacyAtReportedChunksAndTileSeams() {
+		LoadingModList.of(List.of(), List.of(), List.of(), List.of(), Map.of());
+		SharedConstants.tryDetectVersion();
+		Bootstrap.bootStrap();
+
+		int factor = 3;
+		int batchCount = 6;
+		int seed = -1_448_906_188;
+		Preset source = Presets.makeRTFDefault();
+		Preset legacyPreset = source.copy();
+		legacyPreset.world().noiseEngine = WorldSettings.NoiseEngine.LEGACY;
+		Preset quickPreset = source.copy();
+		quickPreset.world().noiseEngine = WorldSettings.NoiseEngine.QUICK_V2;
+
+		int reportedChunkX = Math.floorDiv(5_312, 16);
+		int reportedChunkZ = Math.floorDiv(15_146, 16);
+		List<int[]> chunks = new ArrayList<>();
+		for(int offsetZ = -1; offsetZ <= 1; offsetZ++) {
+			for(int offsetX = -1; offsetX <= 1; offsetX++) {
+				chunks.add(new int[] { reportedChunkX + offsetX, reportedChunkZ + offsetZ });
+			}
+		}
+		int seamChunkX = (reportedChunkX >> factor) << factor;
+		int seamChunkZ = (reportedChunkZ >> factor) << factor;
+		chunks.add(new int[] { seamChunkX - 1, reportedChunkZ });
+		chunks.add(new int[] { seamChunkX, reportedChunkZ });
+		chunks.add(new int[] { reportedChunkX, seamChunkZ - 1 });
+		chunks.add(new int[] { reportedChunkX, seamChunkZ });
+
+		try(
+			GeneratorContext legacy = GeneratorContext.makeCached(legacyPreset, noiseLookup(legacyPreset), seed, factor, batchCount, false);
+			GeneratorContext quick = GeneratorContext.makeCached(quickPreset, noiseLookup(quickPreset), seed, factor, batchCount, false)
+		) {
+			for(int[] chunkPos : chunks) {
+				int chunkX = chunkPos[0];
+				int chunkZ = chunkPos[1];
+				Tile.Chunk legacyChunk = legacy.cache.provideAtChunk(chunkX, chunkZ).getChunkReader(chunkX, chunkZ);
+				Tile.Chunk quickChunk = quick.cache.provideAtChunk(chunkX, chunkZ).getChunkReader(chunkX, chunkZ);
+				assertEquals(chunkX, legacyChunk.getChunkX(), "Legacy cache returned the wrong chunk X");
+				assertEquals(chunkZ, legacyChunk.getChunkZ(), "Legacy cache returned the wrong chunk Z");
+				assertEquals(chunkX, quickChunk.getChunkX(), "Quick V2 cache returned the wrong chunk X");
+				assertEquals(chunkZ, quickChunk.getChunkZ(), "Quick V2 cache returned the wrong chunk Z");
+
+				for(CellSampler.Field field : CellSampler.Field.values()) {
+					DensityFunction legacySampler = new CellSampler(() -> legacy.lookup, field)
+						.new CacheChunk(legacyChunk, new CellSampler.Cache2d(), chunkX, chunkZ);
+					DensityFunction quickSampler = new CellSampler(() -> quick.lookup, field)
+						.new CacheChunk(quickChunk, new CellSampler.Cache2d(), chunkX, chunkZ);
+					for(int dz = 0; dz < 16; dz++) {
+						for(int dx = 0; dx < 16; dx++) {
+							int blockX = (chunkX << 4) + dx;
+							int blockZ = (chunkZ << 4) + dz;
+							DensityFunction.SinglePointContext sample = new DensityFunction.SinglePointContext(blockX, 64, blockZ);
+							double directLegacy = field.read(legacyChunk.getCell(blockX, blockZ), legacy.generator.getHeightmap());
+							double cachedLegacy = legacySampler.compute(sample);
+							double cachedQuick = quickSampler.compute(sample);
+							String location = "field=" + field + ", block=" + blockX + "," + blockZ;
+							assertEquals(
+								Double.doubleToRawLongBits(directLegacy),
+								Double.doubleToRawLongBits(cachedLegacy),
+								"Cached Legacy sampler fell back or selected the wrong cell at " + location
+							);
+							assertEquals(
+								Double.doubleToRawLongBits(cachedLegacy),
+								Double.doubleToRawLongBits(cachedQuick),
+								"Cached Quick V2 sampler diverged from Legacy at " + location
+							);
+						}
+					}
+				}
+			}
+		}
 	}
 
 	@Test
