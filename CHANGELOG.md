@@ -1,5 +1,49 @@
 # Change Log
 
+## 2026-07-24 - Legacy V2 semantic restoration
+
+### Fixed
+
+- Restored the original RTF river-tree construction and unconditional recursive
+  traversal for Legacy V2. The removed child-bound optimization could skip valid
+  warped tributaries, river banks, lakes, and wetlands, producing missing rivers
+  and axis-aligned terrain truncation.
+- Restored the exact Legacy final-density graph for the Legacy V2 cave option.
+  It no longer adds an outer `cache_once(sloped_cheese)` marker or changes
+  production `NoiseChunk` cache ownership.
+- Restored the original scalar bound-query and branch-evaluation behavior for
+  `Map` and `Blend`. Exact batch work remains isolated to explicit Legacy V2
+  batch fills.
+- Removed the speculative `CellSampler` and `Tile` border changes used during
+  diagnosis; those classes were already byte-identical in the original and
+  affected jars.
+
+### Validation
+
+- Compared the user-supplied original jar
+  `A75ED34A2FA36F3222C75F193143A711589DF2E0078B14152FA582AF53E9D1E9`
+  with Legacy V2 using independently generated Legacy and Legacy V2 datapacks.
+- Added a real production `NoiseChunk` regression covering 688,128 density and
+  material samples across center and tile-seam chunks with real RTF tiles and
+  cross-chunk fallback. A separate 45-chunk, three-seed experiment replayed
+  17,879,040 samples while auditing the removed `cache_once` graph.
+- Added a deterministic counterexample showing why child river bounds cannot
+  replace the original traversal.
+- Replayed all three erosion representations across 36,864 cells and verified
+  raw-bit equality for height, erosion height, and sediment.
+- Generated independent worlds with Java 25 on a silent separate desktop and
+  verified exact terrain-bearing chunk data at river/wetland `(505,583)`,
+  inland `(729,159)`, and archipelago/ocean `(1833,-1377)`: block states,
+  biomes, heightmaps, structures, post-processing, status, and terrain geometry
+  all match the original-only jar. Full stable NBT also matched at the river
+  and ocean samples; the inland sample differed only by three shutdown-timed
+  `fluid_ticks`, with identical generated blocks and heightmaps.
+- Repeated the river workload in `original/final/final/original` order with
+  C2ME and OpenCL disabled. Mean start-region-to-player time fell from
+  `15.586 s` to `12.819 s` (17.76% less time, 21.59% higher effective speed).
+  Whole-process startup was excluded because one original-jar trial stalled
+  before integrated-server startup.
+
 ## 2026-07-23 - Preset editor and density correctness
 
 ### Fixed

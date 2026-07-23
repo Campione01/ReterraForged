@@ -35,7 +35,7 @@
   "reterraforged.gui.button.legacyCarverDistribution": "旧版雕刻器分布",
   "reterraforged.gui.button.legacyCarverDistribution.tooltip": "设置雕刻器是否使用1.16分布",
   "reterraforged.gui.button.caveDensityAlgorithm": "三维密度算法",
-  "reterraforged.gui.button.caveDensityAlgorithm.tooltip": "LEGACY 保留原始洞穴密度图；LEGACY_V2 为默认值，保留相同密度图并精确复用重复采样；QUICK_V1 是可选的 quick-noise 新算法。OpenCL 需单独启用，默认关闭。",
+  "reterraforged.gui.button.caveDensityAlgorithm.tooltip": "LEGACY 保留原始洞穴密度图；LEGACY_V2 为默认兼容路线，保持相同密度图且不改变 NoiseChunk 采样语义；QUICK_V1 是可选的 quick-noise 新算法。OpenCL 需单独启用，默认关闭。",
   "reterraforged.gui.button.caveCompatibilityMode": "洞穴兼容模式",
   "reterraforged.gui.button.caveCompatibilityMode.tooltip": "AUTO 会在检测到已知洞穴生物群系兼容目标时调整行为；RTF 强制使用 RTF 洞穴气候与雕刻器；VANILLA 保留原版雕刻器并使用外部洞穴生物群系兼容的气候深度。",
   "reterraforged.gui.button.legacyMountainScaling": "旧版山脉缩放",

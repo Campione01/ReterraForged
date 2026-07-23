@@ -1,8 +1,6 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Random;
 import java.util.function.IntToDoubleFunction;
@@ -16,14 +14,13 @@ import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 
 class NoiseInvariantMetadataTest {
 	@Test
-	void mapCachesStableBoundsAndPreservesOriginalBits() {
+	void mapPreservesOriginalScalarBoundsCallsAndBits() {
 		CountingNoise alpha = new CountingNoise(-0.75F, 1.25F, Float::intBitsToFloat);
 		CountingNoise from = new CountingNoise(-2.0F, 2.0F, seed -> seed * 0.25D);
 		CountingNoise to = new CountingNoise(-4.0F, 4.0F, seed -> seed * -0.5D);
 		Map map = new Map(alpha, from, to);
-		assertFalse(map.constantBounds());
-		assertEquals(1, alpha.minCalls);
-		assertEquals(1, alpha.maxCalls);
+		assertEquals(0, alpha.minCalls);
+		assertEquals(0, alpha.maxCalls);
 
 		Random random = new Random(0x6D61705F626F756EL);
 		for(int index = 0; index < 500_000; index++) {
@@ -36,17 +33,18 @@ class NoiseInvariantMetadataTest {
 			float max = to.compute(x, z, seed);
 			assertBitsEqual(min + factor * (max - min), map.compute(x, z, seed));
 		}
-		assertEquals(1, alpha.minCalls);
-		assertEquals(1, alpha.maxCalls);
+		assertEquals(500_000, alpha.minCalls);
+		assertEquals(500_000, alpha.maxCalls);
 	}
 
 	@Test
-	void mapConstantBoundsPreserveOriginalBits() {
+	void mapConstantBoundsPreserveOriginalScalarCallsAndBits() {
 		CountingNoise alpha = new CountingNoise(-0.75F, 1.25F, Float::intBitsToFloat);
 		Constant from = new Constant(-2.25F);
 		Constant to = new Constant(4.5F);
 		Map map = new Map(alpha, from, to);
-		assertTrue(map.constantBounds());
+		assertEquals(0, alpha.minCalls);
+		assertEquals(0, alpha.maxCalls);
 
 		Random random = new Random(0x6D61705F636F6E73L);
 		for(int index = 0; index < 500_000; index++) {
@@ -59,20 +57,20 @@ class NoiseInvariantMetadataTest {
 			float max = to.compute(x, z, seed);
 			assertBitsEqual(min + factor * (max - min), map.compute(x, z, seed));
 		}
-		assertEquals(1, alpha.minCalls);
-		assertEquals(1, alpha.maxCalls);
+		assertEquals(500_000, alpha.minCalls);
+		assertEquals(500_000, alpha.maxCalls);
 	}
 
 	@Test
-	void blendCachesStableThresholdsAndPreservesOriginalBits() {
+	void blendPreservesOriginalThresholdCallsAndBits() {
 		CountingNoise alpha = new CountingNoise(-1.5F, 2.5F, Float::intBitsToFloat);
 		CountingNoise lower = new CountingNoise(-2.0F, 0.5F, seed -> seed * 0.125D);
 		CountingNoise upper = new CountingNoise(0.25F, 3.0F, seed -> seed * -0.25D);
 		float position = 0.575F;
 		float range = 0.8F;
 		Blend blend = new Blend(alpha, lower, upper, position, range, Interpolation.CURVE3);
-		assertEquals(1, alpha.minCalls);
-		assertEquals(1, alpha.maxCalls);
+		assertEquals(0, alpha.minCalls);
+		assertEquals(0, alpha.maxCalls);
 
 		Random random = new Random(0x626C656E645F626FL);
 		for(int index = 0; index < 500_000; index++) {
@@ -82,8 +80,8 @@ class NoiseInvariantMetadataTest {
 			float expected = originalBlend(alpha, lower, upper, position, range, x, z, seed);
 			assertBitsEqual(expected, blend.compute(x, z, seed));
 		}
-		assertEquals(1_500_001, alpha.minCalls);
-		assertEquals(1_000_001, alpha.maxCalls);
+		assertEquals(3_000_000, alpha.minCalls);
+		assertEquals(2_000_000, alpha.maxCalls);
 	}
 
 	private static float originalBlend(Noise alphaNoise, Noise lower, Noise upper, float position, float range, float x, float z, int seed) {

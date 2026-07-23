@@ -18,11 +18,25 @@ Terrain generation for Minecraft 1.21.1 on NeoForge and Fabric, with configurabl
 - `AUTO` requires raw-bit CPU/GPU parity and a successful speed gate. Any unsupported, busy, rejected, or failed OpenCL path immediately uses the native CPU backend for that tile.
 - RTF owns no C2ME executor, task, future, queue, cache, or OpenCL resource. The backend remains opaque to C2ME's density-function compiler and is designed for coexistence with CPU-accelerated C2ME builds.
 
-QUICK_V1 intentionally changes cave output and does not preserve legacy world or seed output. Select `LEGACY` in the cave settings for the older algorithm.
+QUICK_V1 intentionally changes cave output and does not preserve legacy world or seed output. Select `LEGACY` or `LEGACY_V2` in the cave settings for the original density graph.
+
+## Legacy V2 terrain engine
+
+- Legacy V2 is the default for presets that do not specify
+  `world.noiseEngine`. It runs the original RTF graph and terrain modules with
+  raw-bit-safe low-level, climate-cache, and erosion-storage optimizations.
+- River networks keep the author's original recursive traversal. Biomes,
+  structures, surface rules, aquifers, and third-party noise implementations
+  retain their existing integration points.
+- `LEGACY` remains selectable as the scalar reference. Formal correctness and
+  performance comparisons use the independently supplied original-only jar,
+  because low-level exact improvements may be shared inside this modified jar.
+- Legacy V2 cave density exports the same graph as Legacy and does not add
+  `NoiseChunk` cache markers. OpenCL remains separate and opt-in.
 
 ## QUICK_V2 2D noise engine
 
-- QUICK_V2 is the default for presets that do not specify `world.noiseEngine`. It compiles supported RTF-owned terrain and climate graphs into exact RTF opcodes executed on the pinned quick-noise native/SIMD substrate.
+- QUICK_V2 is an optional new-world execution engine. It compiles supported RTF-owned terrain and climate graphs into RTF opcodes executed on the pinned quick-noise native/SIMD substrate.
 - Windows x86-64 dispatch selects SSE4.2, AVX2+FMA, or AVX512+FMA once per process. Globally aligned 64x64 tiles with two cache slots support normal generation, global terrain scaling, and zoomed previews without increasing the original per-graph, per-thread float capacity.
 - RTF Perlin, Perlin2, Simplex, ridge, Billow, Cubic, White, Worley, WorleyEdge, trigonometric, seed, interpolation, range, and graph-operator behavior follow the legacy Java node contracts. Unsupported structural or dynamic-coordinate roots execute wholly through LEGACY and cannot mix native and Java fields inside one root.
 - River networks, neighborhood erosion, biome selection, aquifers, structures, surface rules, block placement, and third-party `Noise.compute` implementations remain on their existing CPU/Minecraft paths.

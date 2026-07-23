@@ -4,7 +4,8 @@
 
 | Source | Revision used | Role in this project |
 | --- | --- | --- |
-| This repository before QUICK | `a49817b` | Exact Minecraft 1.21.1 terrain semantic baseline |
+| User-supplied original-only 1.21.1 jar | SHA-256 `A75ED34A2FA36F3222C75F193143A711589DF2E0078B14152FA582AF53E9D1E9` | Authoritative executable and numeric terrain baseline |
+| This repository before QUICK | `a49817b` | Historical source reference; not byte-identical to the authoritative jar |
 | [ReTerraForged](https://github.com/racoonman2/ReTerraForged) | branch `1.20.2`, `98fd3a28f2ebd638319e797a9138a3418484150f` | Modern upstream architecture, preview and port lineage |
 | [TerraForged](https://github.com/TerraForged/TerraForged) | branch `0.3.x`, `6dd607ebfd41a3b7274e090b1f2cf565d53d1d44` | Original terrain, continent, river and filter design lineage |
 | [quick-noise](https://github.com/Alysara/quick-noise) | production pin `baae360ff02626b58ff56c7bd46087d024fa8407`; research checkout `ece6ec70178e6de1457c418b81bb73a6d4307c98` | SIMD/batch execution substrate, not an RTF semantic specification |
@@ -32,7 +33,9 @@ texts and source coordinate are packaged under `native/licenses/quick-noise`.
 
 ## Evidence Discipline
 
-- Same-version LEGACY output settles numeric behavior.
+- Independent output from the authoritative original-only jar settles numeric
+  behavior. `LEGACY` inside the modified jar is a development oracle, not the
+  release baseline.
 - Upstream code explains intent and ownership but cannot override a 1.21.1
   same-input result.
 - quick-noise documents primitive execution and SIMD layout; it does not define

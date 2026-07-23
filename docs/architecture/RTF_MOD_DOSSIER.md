@@ -8,13 +8,17 @@ replacement for ReTerraForged's world-generation model.
 
 The truth hierarchy for terrain restoration is:
 
-1. Commit `a49817b` in this repository: the exact Minecraft 1.21.1 code before
-   QUICK_V1/QUICK_V2 was integrated.
-2. The `LEGACY` engine in the current tree: the executable form of that same RTF
-   noise semantics after unrelated port fixes.
-3. ReTerraForged 1.20.2 and TerraForged 0.3.x: architectural lineage and module
+1. The user-supplied original-only 1.21.1 jar with SHA-256
+   `A75ED34A2FA36F3222C75F193143A711589DF2E0078B14152FA582AF53E9D1E9`.
+   This is the authoritative executable and numeric baseline.
+2. The `LEGACY` engine in the current tree: a development sanity oracle whose
+   low-level implementation may already contain raw-bit-safe optimizations. It is
+   not a substitute for the independent original jar in release comparisons.
+3. Commit `a49817b`: a useful repository-history reference, but not byte-identical
+   to the supplied original jar and therefore not the formal baseline.
+4. ReTerraForged 1.20.2 and TerraForged 0.3.x: architectural lineage and module
    ownership references, not numeric baselines for 1.21.1.
-4. Screenshots and generated worlds: runtime evidence, not a substitute for a
+5. Screenshots and generated worlds: runtime evidence, not a substitute for a
    same-input field comparison.
 
 `QUICK_V2` is accepted only when it preserves the current `LEGACY` Cell contract.

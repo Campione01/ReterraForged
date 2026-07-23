@@ -95,9 +95,7 @@ public class PresetNoiseRouterData {
 			DensityFunction quickCaves = RTFDensityFunctions.quickCaves(slopedCheese, -worldDepth, caves.entranceCaveProbability, caves.cheeseCaveDepthOffset, caves.cheeseCaveProbability, caves.spaghettiCaveProbability, caves.noodleCaveProbability);
 			finalDensity = DensityFunctions.mul(DensityFunctions.interpolated(quickCaves), DensityFunctions.constant(0.64D)).squeeze();
 		} else {
-			DensityFunction rangeInput = caves.densityAlgorithm == DensityAlgorithm.LEGACY_V2
-				? DensityFunctions.cacheOnce(slopedCheese)
-				: slopedCheese;
+			DensityFunction rangeInput = slopedCheese;
 			DensityFunction entrances = caves.entranceCaveProbability > 0.0F ? DensityFunctions.min(rangeInput, DensityFunctions.mul(DensityFunctions.constant(5.0D), DensityFunctions.interpolated(NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.ENTRANCES)))) : rangeInput;
 			DensityFunction slopedCheeseRange = DensityFunctions.mul(DensityFunctions.rangeChoice(rangeInput, -1000000.0D, cheeseCaveDepthOffset, entrances, DensityFunctions.interpolated(slideOverworld(underground(caves.cheeseCaveProbability, densityFunctions, noiseParams, slopedCheese), -worldDepth))), DensityFunctions.constant(0.64)).squeeze();
 			finalDensity = DensityFunctions.min(slopedCheeseRange, NoiseRouterData.getFunction(densityFunctions, NoiseRouterData.NOODLE));

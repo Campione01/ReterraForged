@@ -1,7 +1,6 @@
 package raccoonman.reterraforged.data.worldgen.preset;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,14 +37,15 @@ class CaveDensityAlgorithmParityTest {
 	}
 
 	@Test
-	void legacyV2AddsOnlyAnExactCacheMarker() {
+	void legacyV2PreservesTheOriginalDensityGraph() {
 		NoiseRouter legacy = createUnseededRouter(DensityAlgorithm.LEGACY, 0.73F);
 		NoiseRouter legacyV2 = createUnseededRouter(DensityAlgorithm.LEGACY_V2, 0.73F);
 
 		int legacyCaches = countCacheOnce(legacy.finalDensity());
 		int legacyV2Caches = countCacheOnce(legacyV2.finalDensity());
 
-		assertEquals(legacyCaches + 2, legacyV2Caches);
+		assertEquals(legacyCaches, legacyV2Caches);
+		assertEquals(legacy.finalDensity(), legacyV2.finalDensity());
 	}
 
 	@Test
