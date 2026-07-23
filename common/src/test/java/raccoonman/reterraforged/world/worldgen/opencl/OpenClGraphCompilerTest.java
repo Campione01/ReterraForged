@@ -174,6 +174,7 @@ class OpenClGraphCompilerTest {
 		HolderGetter<DensityFunction> densityFunctions = vanilla.lookupOrThrow(Registries.DENSITY_FUNCTION);
 		HolderGetter<NormalNoise.NoiseParameters> noiseParameters = vanilla.lookupOrThrow(Registries.NOISE);
 		Preset preset = Presets.makeRTFDefault();
+		preset.caves().densityAlgorithm = DensityAlgorithm.QUICK_V1;
 		preset.caves().compatibilityMode = CompatibilityMode.RTF;
 		NoiseRouter router = RtfRouterAccess.create(preset, densityFunctions, noiseParameters);
 		AtomicInteger quickNodes = new AtomicInteger();

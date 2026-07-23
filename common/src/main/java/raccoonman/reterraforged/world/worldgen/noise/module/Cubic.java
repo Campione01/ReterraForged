@@ -19,7 +19,7 @@ public record Cubic(float frequency, int octaves, float lacunarity, float gain, 
 	}
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		x *= this.frequency;
 		z *= this.frequency;
 		
@@ -33,6 +33,11 @@ public record Cubic(float frequency, int octaves, float lacunarity, float gain, 
     		sum += sample(x, z, seed + i) * amplifier;
     	}
 		return NoiseUtil.map(sum, this.minValue, this.maxValue, this.maxValue - this.minValue);
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return true;
 	}
 
 	@Override

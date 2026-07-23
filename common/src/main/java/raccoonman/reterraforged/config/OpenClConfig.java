@@ -33,7 +33,7 @@ public record OpenClConfig(Mode mode, int minimumBatchSize, int failureLimit, bo
 		try(BufferedReader reader = Files.newBufferedReader(path)) {
 			Properties props = new Properties();
 			props.load(reader);
-			Mode mode = Mode.parse(props.getProperty("mode"), Mode.AUTO);
+			Mode mode = Mode.parse(props.getProperty("mode"), Mode.OFF);
 			int minimumBatchSize = clamp(parseInt(props, "minimumBatchSize", 32), MIN_BATCH_SIZE, MAX_BATCH_SIZE);
 			int failureLimit = clamp(parseInt(props, "failureLimit", 1), MIN_FAILURE_LIMIT, MAX_FAILURE_LIMIT);
 			boolean allowCpuDevice = parseBoolean(props, "allowCpuDevice", false);
@@ -45,7 +45,7 @@ public record OpenClConfig(Mode mode, int minimumBatchSize, int failureLimit, bo
 	}
 
 	public static OpenClConfig makeDefault() {
-		return new OpenClConfig(Mode.AUTO, 32, 1, false);
+		return new OpenClConfig(Mode.OFF, 32, 1, false);
 	}
 
 	private static void writeDefaults(Path path, OpenClConfig config) {
@@ -56,8 +56,9 @@ public record OpenClConfig(Mode mode, int minimumBatchSize, int failureLimit, bo
 			}
 			try(BufferedWriter writer = Files.newBufferedWriter(path)) {
 				writer.write("# ReTerraForged OpenCL Config\n");
-				writer.write("# AUTO enables QUICK_V1 only after exact CPU/GPU tile parity and a local speed check.\n");
-				writer.write("# Unavailable, busy, rejected, or failed GPU work falls back to the same native CPU algorithm.\n");
+				writer.write("# OpenCL is opt-in. OFF keeps Legacy V2 and QUICK_V1 on their CPU backends.\n");
+				writer.write("# AUTO or ON may accelerate admitted 3D density batches after exact CPU/GPU parity checks.\n");
+				writer.write("# Unavailable, busy, rejected, or failed GPU work falls back to the matching CPU algorithm.\n");
 				writer.write("# This backend is independent from C2ME and does not share its executors or OpenCL context.\n");
 				writer.write("#\n");
 				writer.write("mode=" + config.mode() + "\n");

@@ -13,8 +13,21 @@ record Power(Noise input, float power) implements Noise {
 	).apply(instance, Power::new));
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		return NoiseUtil.pow(this.input.compute(x, z, seed), this.power);
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input.supportsBulk();
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		this.input.fill(batch, seed, output);
+		for(int index = 0; index < output.length; index++) {
+			output[index] = NoiseUtil.pow(output[index], this.power);
+		}
 	}
 
 	@Override

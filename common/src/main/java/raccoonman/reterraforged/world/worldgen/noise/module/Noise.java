@@ -16,13 +16,26 @@ public interface Noise {
         }
         return new Holder.Direct<>(noise);
     });
-    
-	default float compute(float x, float z, int seed) {
-		return QuickNoiseRuntime.compute(this, x, z, seed);
+
+	float compute(float x, float z, int seed);
+
+	default float computeRoot(float x, float z, int seed) {
+		return NoiseRootRuntime.computeRoot(this, x, z, seed);
 	}
 
-	default float computeLegacy(float x, float z, int seed) {
-		throw new UnsupportedOperationException("Noise implementation must override compute or computeLegacy");
+	/**
+	 * Whether this original RTF node owns a batch implementation that preserves
+	 * its scalar result. Third-party implementations are scalar by default.
+	 */
+	default boolean supportsBulk() {
+		return false;
+	}
+
+	default void fill(NoiseBatch batch, int seed, float[] output) {
+		batch.validate(output);
+		for(int index = 0; index < output.length; index++) {
+			output[index] = this.compute(batch.xAt(index), batch.zAt(index), seed);
+		}
 	}
 	
 	float minValue();

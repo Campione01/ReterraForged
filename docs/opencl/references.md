@@ -12,7 +12,7 @@ This ledger distinguishes code used directly from research that only informed de
 - RTF-written structure around the dependency: scalar/AVX2 runtime dispatch, contiguous x-major batches, fixed operation order, five fused 3D cave fields, and allocation-free sampling after initialization.
 - Rejected backend: quick-noise's SSE4.2 path differed from scalar by one `1/4096` quantum in 21 of 131,072 audited samples. It is not dispatched or packaged; AVX2 and scalar matched exactly across another 2,097,152 randomized samples.
 - Deliberate deviation: `GridNoise` is not used. Its vector-width and call-shape-dependent rounding prevented bit-identical CPU/OpenCL fallback at tile boundaries.
-- Scope decision: QUICK_V1 is a new world-generation algorithm. It does not preserve legacy world or seed output; `LEGACY` remains an explicit preset option.
+- Scope decision: QUICK_V1 is a new world-generation algorithm. It does not preserve legacy world or seed output; `LEGACY_V2` is the default and `LEGACY` remains the unchanged reference option.
 
 ## FastFlow (Pacific Graphics 2024)
 

@@ -34,17 +34,19 @@ class WorldSettingsNoiseEngineTest {
 		""";
 
 	@Test
-	void oldPresetWithoutFieldDefaultsToQuickV2() {
+	void presetWithoutFieldDefaultsToLegacyV2() {
 		WorldSettings settings = decode(BASE_JSON);
 
-		assertEquals(WorldSettings.NoiseEngine.QUICK_V2, settings.noiseEngine);
+		assertEquals(WorldSettings.NoiseEngine.LEGACY_V2, settings.noiseEngine);
 	}
 
 	@Test
-	void explicitLegacySelectionSurvivesDecoding() {
-		String json = BASE_JSON.replaceFirst("\\{", "{\"noiseEngine\":\"legacy\",");
+	void everyExplicitSelectionSurvivesDecoding() {
+		for(WorldSettings.NoiseEngine engine : WorldSettings.NoiseEngine.values()) {
+			String json = BASE_JSON.replaceFirst("\\{", "{\"noiseEngine\":\"" + engine.getSerializedName() + "\",");
 
-		assertEquals(WorldSettings.NoiseEngine.LEGACY, decode(json).noiseEngine);
+			assertEquals(engine, decode(json).noiseEngine);
+		}
 	}
 
 	private static WorldSettings decode(String json) {

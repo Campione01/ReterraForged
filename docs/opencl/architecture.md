@@ -32,7 +32,7 @@ The final-density graph combines the CPU terrain density with one opaque `QuickC
 - Java loads a packaged Windows x86-64 dispatcher through JNI.
 - The dispatcher selects AVX2+FMA or scalar code at runtime. SSE4.2 is intentionally excluded because its quick-noise output was not bit-identical to the other backends.
 - Both packaged backends directly use the pinned quick-noise batch API and expose the same tile ABI.
-- QUICK_V1 requires a native backend. Missing native support fails world setup clearly instead of silently changing the selected terrain algorithm; users may select `LEGACY` in the preset.
+- QUICK_V1 requires a native backend and is an explicit alternate mode. Missing native support fails world setup clearly instead of silently changing the selected terrain algorithm; `LEGACY_V2` is the default preset mode.
 
 ## OpenCL Backend
 

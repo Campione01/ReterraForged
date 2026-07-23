@@ -5,6 +5,7 @@ import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise.Visitor;
+import raccoonman.reterraforged.world.worldgen.noise.module.NoiseBatch;
 
 public record CompoundWarp(Domain input1, Domain input2) implements Domain {
 	public static final MapCodec<CompoundWarp> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -24,6 +25,53 @@ public record CompoundWarp(Domain input1, Domain input2) implements Domain {
         float ax = this.input1.getX(x, z, seed);
         float ay = this.input1.getZ(x, z, seed);
         return this.input2.getOffsetZ(ax, ay, seed);
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input1.supportsBulk() && this.input2.supportsBulk();
+	}
+
+	@Override
+	public void fillOffsetX(NoiseBatch batch, int seed, float[] output) {
+		float[] xCoordinates = batch.acquire();
+		float[] zCoordinates = batch.acquire();
+		try {
+			this.input1.fillX(batch, seed, xCoordinates);
+			this.input1.fillZ(batch, seed, zCoordinates);
+			this.input2.fillOffsetX(batch.transformed(xCoordinates, zCoordinates), seed, output);
+		} finally {
+			batch.release(zCoordinates);
+			batch.release(xCoordinates);
+		}
+	}
+
+	@Override
+	public void fillOffsetZ(NoiseBatch batch, int seed, float[] output) {
+		float[] xCoordinates = batch.acquire();
+		float[] zCoordinates = batch.acquire();
+		try {
+			this.input1.fillX(batch, seed, xCoordinates);
+			this.input1.fillZ(batch, seed, zCoordinates);
+			this.input2.fillOffsetZ(batch.transformed(xCoordinates, zCoordinates), seed, output);
+		} finally {
+			batch.release(zCoordinates);
+			batch.release(xCoordinates);
+		}
+	}
+
+	@Override
+	public float getRootOffsetX(float x, float z, int seed) {
+		float ax = this.input1.getRootX(x, z, seed);
+		float ay = this.input1.getRootZ(x, z, seed);
+		return this.input2.getRootOffsetX(ax, ay, seed);
+	}
+
+	@Override
+	public float getRootOffsetZ(float x, float z, int seed) {
+		float ax = this.input1.getRootX(x, z, seed);
+		float ay = this.input1.getRootZ(x, z, seed);
+		return this.input2.getRootOffsetZ(ax, ay, seed);
 	}
 
 	@Override

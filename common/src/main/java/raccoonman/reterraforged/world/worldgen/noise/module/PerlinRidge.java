@@ -29,7 +29,7 @@ record PerlinRidge(float frequency, int octaves, float lacunarity, float gain, I
 	}
 
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
         x *= this.frequency;
         z *= this.frequency;
         float amp = 2.0F;
@@ -48,6 +48,18 @@ record PerlinRidge(float frequency, int octaves, float lacunarity, float gain, I
             amp *= this.gain;
         }
         return NoiseUtil.map(value, this.min, this.max, Math.abs(this.max - this.min));
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return true;
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		if(!batch.fillNative(this, seed, output)) {
+			Noise.super.fill(batch, seed, output);
+		}
 	}
 
 	@Override

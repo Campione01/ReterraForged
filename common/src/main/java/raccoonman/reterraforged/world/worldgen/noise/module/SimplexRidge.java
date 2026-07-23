@@ -25,7 +25,7 @@ record SimplexRidge(float frequency, int octaves, float lacunarity, float gain, 
 	}
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
         x *= this.frequency;
         z *= this.frequency;
         float value = 0.0F;
@@ -46,6 +46,11 @@ record SimplexRidge(float frequency, int octaves, float lacunarity, float gain, 
             amp *= this.gain;
         }
         return NoiseUtil.map(value, this.min, this.max, Math.abs(this.max - this.min));
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return true;
 	}
 
 	@Override

@@ -33,7 +33,6 @@ import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 class QuickNoiseTerrainDistributionTest {
-	private static final float QUANTIZATION = 4096.0F;
 	private static final int WORLD_SEED = 0x5EED_2171;
 	private static final int WINDOW_SIZE = 64;
 	private static final int[][] SELECTOR_ORIGINS = {
@@ -50,6 +49,7 @@ class QuickNoiseTerrainDistributionTest {
 		int[] legacyBuckets = new int[3];
 		int[] quickBuckets = new int[3];
 		int bucketMismatches = 0;
+		int bitMismatches = 0;
 		float maxError = 0.0F;
 		double squaredError = 0.0D;
 
@@ -59,9 +59,12 @@ class QuickNoiseTerrainDistributionTest {
 					for(int dx = 0; dx < WINDOW_SIZE; dx++) {
 						int x = origin[0] + dx;
 						int z = origin[1] + dz;
-						float legacy = quantize(computeLegacy(selector, x, z));
+						float legacy = computeLegacy(selector, x, z);
 						QuickNoiseRuntime.prepareSample(x, z);
-						float quick = selector.compute(x, z, 0);
+						float quick = selector.computeRoot(x, z, 0);
+						if(Float.floatToRawIntBits(legacy) != Float.floatToRawIntBits(quick)) {
+							bitMismatches++;
+						}
 						float error = Math.abs(legacy - quick);
 						maxError = Math.max(maxError, error);
 						squaredError += error * error;
@@ -78,9 +81,9 @@ class QuickNoiseTerrainDistributionTest {
 		}
 
 		float rootMeanSquareError = (float)Math.sqrt(squaredError / samples);
-		assertTrue(maxError <= 1.0F / QUANTIZATION, "Mountain selector max error=" + maxError + ", rmse=" + rootMeanSquareError);
-		assertTrue(bucketMismatches <= samples / 1000, "Mountain selector bucket mismatches=" + bucketMismatches + ", legacy=" + counts(legacyBuckets) + ", quick=" + counts(quickBuckets));
-		System.out.println("RTF_QUICK_V2_MOUNTAIN_SELECTOR max=" + maxError + ",rmse=" + rootMeanSquareError + ",mismatches=" + bucketMismatches + ",legacy=" + counts(legacyBuckets) + ",quick=" + counts(quickBuckets));
+		assertTrue(bitMismatches == 0, "Mountain selector bit mismatches=" + bitMismatches + ", max error=" + maxError + ", rmse=" + rootMeanSquareError);
+		assertTrue(bucketMismatches == 0, "Mountain selector bucket mismatches=" + bucketMismatches + ", legacy=" + counts(legacyBuckets) + ", quick=" + counts(quickBuckets));
+		System.out.println("RTF_QUICK_V2_MOUNTAIN_SELECTOR max=" + maxError + ",rmse=" + rootMeanSquareError + ",bitMismatches=" + bitMismatches + ",bucketMismatches=" + bucketMismatches + ",legacy=" + counts(legacyBuckets) + ",quick=" + counts(quickBuckets));
 	}
 
 	@Test
@@ -96,15 +99,7 @@ class QuickNoiseTerrainDistributionTest {
 			Cell[] quickCells = sample(quick, origins);
 			Comparison comparison = compare(legacyCells, quickCells);
 
-			assertTrue(comparison.height.rootMeanSquareError() <= 0.0025F, comparison::toString);
-			assertTrue(comparison.continentEdge.maxError() <= 0.002F, comparison::toString);
-			assertTrue(comparison.terrainRegionEdge.maxError() <= 0.002F, comparison::toString);
-			assertTrue(comparison.temperature.rootMeanSquareError() <= 0.01F, comparison::toString);
-			assertTrue(comparison.moisture.rootMeanSquareError() <= 0.01F, comparison::toString);
-			assertTrue(comparison.temperature.largeErrorRatio() <= 0.001F, comparison::toString);
-			assertTrue(comparison.moisture.largeErrorRatio() <= 0.001F, comparison::toString);
-			assertTrue(comparison.categoryMismatchRatio() <= 0.01F, comparison::toString);
-			assertTrue(comparison.maxCategoryShareDelta() <= 0.005F, comparison::toString);
+			assertExact(comparison);
 			assertTrue(quick.noiseEngine != null && quick.noiseEngine.compiledGraphCount() > 0, "QUICK_V2 must compile production terrain graphs");
 			System.out.println("RTF_QUICK_V2_DEFAULT_DISTRIBUTION " + comparison);
 		}
@@ -126,9 +121,7 @@ class QuickNoiseTerrainDistributionTest {
 			int legacyIslands = comparison.legacyCategories.getOrDefault(TerrainCategory.ISLAND, 0);
 
 			assertTrue(legacyIslands > 0, comparison::toString);
-			assertTrue(comparison.height.rootMeanSquareError() <= 0.0025F, comparison::toString);
-			assertTrue(comparison.categoryMismatchRatio() <= 0.01F, comparison::toString);
-			assertTrue(comparison.maxCategoryShareDelta() <= 0.01F, comparison::toString);
+			assertExact(comparison);
 			assertTrue(quick.noiseEngine != null && quick.noiseEngine.compiledGraphCount() > 0, "QUICK_V2 must compile archipelago graphs");
 			System.out.println("RTF_QUICK_V2_ARCHIPELAGO_DISTRIBUTION " + comparison);
 		}
@@ -154,10 +147,7 @@ class QuickNoiseTerrainDistributionTest {
 			}
 
 			assertTrue(legacyRiverSamples > 0, comparison::toString);
-			assertTrue(comparison.height.rootMeanSquareError() <= 0.003F, comparison::toString);
-			assertTrue(comparison.riverMask.rootMeanSquareError() <= 0.003F, comparison::toString);
-			assertTrue(comparison.categoryMismatchRatio() <= 0.01F, comparison::toString);
-			assertTrue(comparison.maxCategoryShareDelta() <= 0.01F, comparison::toString);
+			assertExact(comparison);
 			System.out.println("RTF_QUICK_V2_RIVER_DISTRIBUTION affected=" + legacyRiverSamples + "," + comparison);
 		}
 	}
@@ -324,6 +314,17 @@ class QuickNoiseTerrainDistributionTest {
 		return new Comparison(height, continentEdge, terrainRegionEdge, temperature, moisture, riverMask, legacy.length, categoryMismatches, terrainMismatches, legacyCategories, quickCategories);
 	}
 
+	private static void assertExact(Comparison comparison) {
+		assertTrue(comparison.height.bitMismatches() == 0, comparison::toString);
+		assertTrue(comparison.continentEdge.bitMismatches() == 0, comparison::toString);
+		assertTrue(comparison.terrainRegionEdge.bitMismatches() == 0, comparison::toString);
+		assertTrue(comparison.temperature.bitMismatches() == 0, comparison::toString);
+		assertTrue(comparison.moisture.bitMismatches() == 0, comparison::toString);
+		assertTrue(comparison.riverMask.bitMismatches() == 0, comparison::toString);
+		assertTrue(comparison.categoryMismatches == 0, comparison::toString);
+		assertTrue(comparison.terrainMismatches == 0, comparison::toString);
+	}
+
 	private static Noise mountainSelector(Preset preset, int seed) {
 		TerrainSettings.General general = preset.terrain().general;
 		Seed mountainSeed = new Seed(seed).offset(general.terrainSeedOffset);
@@ -336,16 +337,12 @@ class QuickNoiseTerrainDistributionTest {
 
 	private static float computeLegacy(Noise noise, float x, float z) {
 		try(QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(null)) {
-			return noise.computeLegacy(x, z, 0);
+			return noise.compute(x, z, 0);
 		}
 	}
 
 	private static int mountainBucket(float value) {
 		return value < 0.3F ? 0 : value > 0.8F ? 2 : 1;
-	}
-
-	private static float quantize(float value) {
-		return Math.round(value * QUANTIZATION) / QUANTIZATION;
 	}
 
 	private static String counts(int[] counts) {
@@ -356,6 +353,7 @@ class QuickNoiseTerrainDistributionTest {
 		private float maxError;
 		private double squaredError;
 		private int largeErrors;
+		private int bitMismatches;
 		private int samples;
 
 		private void add(float expected, float actual) {
@@ -365,7 +363,14 @@ class QuickNoiseTerrainDistributionTest {
 			if(error > 0.01F) {
 				this.largeErrors++;
 			}
+			if(Float.floatToRawIntBits(expected) != Float.floatToRawIntBits(actual)) {
+				this.bitMismatches++;
+			}
 			this.samples++;
+		}
+
+		private int bitMismatches() {
+			return this.bitMismatches;
 		}
 
 		private float maxError() {
@@ -382,7 +387,7 @@ class QuickNoiseTerrainDistributionTest {
 
 		@Override
 		public String toString() {
-			return "max=" + this.maxError() + ",rmse=" + this.rootMeanSquareError() + ",large=" + this.largeErrorRatio();
+			return "bits=" + this.bitMismatches() + ",max=" + this.maxError() + ",rmse=" + this.rootMeanSquareError() + ",large=" + this.largeErrorRatio();
 		}
 	}
 

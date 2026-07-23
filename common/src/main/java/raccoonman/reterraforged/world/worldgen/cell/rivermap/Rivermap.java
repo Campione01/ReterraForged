@@ -25,15 +25,27 @@ public class Rivermap implements ExpiringEntry {
     }
     
     public void apply(Cell cell, float x, float z) {
-        float rx = this.riverWarp.getX(x, z, 0);
-        float rz = this.riverWarp.getZ(x, z, 0);
-        float lx = this.lakeWarp.getOffsetX(rx, rz, 0);
-        float lz = this.lakeWarp.getOffsetZ(rx, rz, 0);
+        float rx = this.riverWarp.getRootX(x, z, 0);
+        float rz = this.riverWarp.getRootZ(x, z, 0);
+        float lx = this.lakeWarp.getRootOffsetX(rx, rz, 0);
+        float lz = this.lakeWarp.getRootOffsetZ(rx, rz, 0);
         for (Network network : this.networks) {
             if (network.contains(rx, rz)) {
                 network.carve(cell, rx, rz, lx, lz);
             }
         }
+    }
+
+    protected Domain lakeWarp() {
+        return this.lakeWarp;
+    }
+
+    protected Domain riverWarp() {
+        return this.riverWarp;
+    }
+
+    protected Network[] networks() {
+        return this.networks;
     }
     
     @Override

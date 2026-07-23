@@ -36,6 +36,29 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
             network.carve(cell, x, z, nx, nz);
         }
     }
+
+    public void carveBounded(Cell cell, float x, float z, float nx, float nz) {
+        River river = this.riverCarver.river;
+        RiverWarp warp = this.riverCarver.warp;
+        float t = Line.distanceOnLine(x, z, river.x1, river.z1, river.x2, river.z2);
+        float px = x;
+        float pz = z;
+        float pt = t;
+        if(warp.test(t)) {
+            long offset = warp.getOffset(x, z, pt, river);
+            x += PosUtil.unpackLeftf(offset);
+            z += PosUtil.unpackRightf(offset);
+            t = Line.distanceOnLine(x, z, river.x1, river.z1, river.x2, river.z2);
+        }
+        this.carveRiver(cell, px, pz, pt, x, z, t);
+        this.carveWetlands(cell, x, z, nx, nz);
+        this.carveLakes(cell, x, z, nx, nz);
+        for(Network network : this.children) {
+            if(network.contains(x, z)) {
+                network.carveBounded(cell, x, z, nx, nz);
+            }
+        }
+    }
     
     public boolean overlaps(River river, float extend) {
         return overlaps(river, this.riverCarver, extend) || overlaps(river, this.children, extend);
@@ -127,6 +150,17 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
         
         public Network build() {
             return this.build(this.recordBounds(Boundsf.builder()).build());
+        }
+
+        public Network buildBounded() {
+            Boundsf bounds = this.recordBounds(Boundsf.builder()).build();
+            return new Network(
+                this.carver,
+                this.lakes.toArray(Lake[]::new),
+                this.wetlands.toArray(Wetland[]::new),
+                this.children.stream().map(Builder::buildBounded).toArray(Network[]::new),
+                bounds
+            );
         }
         
         private Network build(Boundsf bounds) {

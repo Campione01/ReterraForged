@@ -13,8 +13,27 @@ record Warp(Noise input, Domain domain) implements Noise {
 	).apply(instance, Warp::new));
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		return this.input.compute(this.domain.getX(x, z, seed), this.domain.getZ(x, z, seed), seed);
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input.supportsBulk() && this.domain.supportsBulk();
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		float[] xCoordinates = batch.acquire();
+		float[] zCoordinates = batch.acquire();
+		try {
+			this.domain.fillX(batch, seed, xCoordinates);
+			this.domain.fillZ(batch, seed, zCoordinates);
+			this.input.fill(batch.transformed(xCoordinates, zCoordinates), seed, output);
+		} finally {
+			batch.release(zCoordinates);
+			batch.release(xCoordinates);
+		}
 	}
 
 	@Override

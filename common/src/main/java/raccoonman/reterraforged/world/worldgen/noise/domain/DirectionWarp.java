@@ -7,6 +7,7 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise.Visitor;
+import raccoonman.reterraforged.world.worldgen.noise.module.NoiseBatch;
 
 public record DirectionWarp(Noise direction, Noise strength) implements Domain {
 	public static final MapCodec<DirectionWarp> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -21,9 +22,56 @@ public record DirectionWarp(Noise direction, Noise strength) implements Domain {
 	}
 
 	@Override
-	public float getOffsetZ(float x, float z, int seed) {
+    public float getOffsetZ(float x, float z, int seed) {
         float angle = this.direction.compute(x, z, seed) * 6.2831855F;
         return NoiseUtil.cos(angle) * this.strength.compute(x, z, seed);
+    }
+
+	@Override
+	public boolean supportsBulk() {
+		return this.direction.supportsBulk() && this.strength.supportsBulk();
+	}
+
+	@Override
+	public void fillOffsetX(NoiseBatch batch, int seed, float[] output) {
+		this.direction.fill(batch, seed, output);
+		float[] strengthValues = batch.acquire();
+		try {
+			this.strength.fill(batch, seed, strengthValues);
+			for(int index = 0; index < output.length; index++) {
+				float angle = output[index] * 6.2831855F;
+				output[index] = NoiseUtil.sin(angle) * strengthValues[index];
+			}
+		} finally {
+			batch.release(strengthValues);
+		}
+	}
+
+	@Override
+	public void fillOffsetZ(NoiseBatch batch, int seed, float[] output) {
+		this.direction.fill(batch, seed, output);
+		float[] strengthValues = batch.acquire();
+		try {
+			this.strength.fill(batch, seed, strengthValues);
+			for(int index = 0; index < output.length; index++) {
+				float angle = output[index] * 6.2831855F;
+				output[index] = NoiseUtil.cos(angle) * strengthValues[index];
+			}
+		} finally {
+			batch.release(strengthValues);
+		}
+	}
+
+	@Override
+	public float getRootOffsetX(float x, float z, int seed) {
+		float angle = this.direction.computeRoot(x, z, seed) * 6.2831855F;
+		return NoiseUtil.sin(angle) * this.strength.computeRoot(x, z, seed);
+	}
+
+	@Override
+	public float getRootOffsetZ(float x, float z, int seed) {
+		float angle = this.direction.computeRoot(x, z, seed) * 6.2831855F;
+		return NoiseUtil.cos(angle) * this.strength.computeRoot(x, z, seed);
 	}
 
 	@Override

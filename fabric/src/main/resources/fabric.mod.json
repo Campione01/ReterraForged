@@ -3,7 +3,7 @@
   "id": "reterraforged",
   "version": "${version}",
   "name": "ReTerraForged",
-  "description": "Terrain generation for Minecraft 1.21.1 with configurable archipelagos, island mountains, coast and biome fixes. QUICK_V2 uses Alysara/quick-noise (MIT/Apache-2.0) for native batched 2D terrain fields; QUICK_V1 provides native CPU and optional OpenCL cave density. Compatibility architecture was informed by FastFlow (PG 2024), C2ME, and the Khronos OpenCL 1.2 specification. Notices are bundled.",
+  "description": "Terrain generation for Minecraft 1.21.1 with configurable archipelagos, island mountains, coast and biome fixes. Legacy V2 is the default CPU path for both RTF terrain and the original cave-density graph. QUICK_V2 and QUICK_V1 remain optional alternate algorithms using Alysara/quick-noise (MIT/Apache-2.0); OpenCL is opt-in. Compatibility architecture was informed by FastFlow (PG 2024), C2ME, and the Khronos OpenCL 1.2 specification. Notices are bundled.",
   "authors": [
 	"dags",
 	"Won-Ton",

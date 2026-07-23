@@ -102,7 +102,7 @@ class MixinRandomState {
 	        }
 		};
 		NoiseRouter mapped = router.mapAll(this.densityFunctionWrapper);
-		if(this.hasContext) {
+		if(this.hasContext && OpenClManager.isEnabledByConfig()) {
 			this.openClFinalDensity = OpenClDensityFunctions.wrapFinalDensity(mapped.finalDensity());
 		}
 		return mapped;

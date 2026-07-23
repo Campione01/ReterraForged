@@ -7,7 +7,7 @@ import java.util.List;
 
 public final class QuickNoiseGraph {
 	private static final int MAGIC = 0x32564E51;
-	private static final int VERSION = 3;
+	private static final int VERSION = 6;
 	private static final int HEADER_BYTES = 20;
 	private static final int NODE_BYTES = 48;
 
@@ -103,7 +103,13 @@ public final class QuickNoiseGraph {
 		RTF_WORLEY(41),
 		RTF_WORLEY_EDGE(42),
 		RTF_SIN(43),
-		RTF_COS(44);
+		RTF_COS(44),
+		SUBTRACT(45),
+		ALPHA(46),
+		SIGNED_INT_POW(47),
+		SELECT(48),
+		RTF_PERLIN_FIXED(49),
+		RTF_PERLIN2_FIXED(50);
 
 		private final int code;
 
@@ -200,7 +206,7 @@ public final class QuickNoiseGraph {
 
 		private static boolean isRtfPrimitive(Opcode opcode) {
 			return switch(opcode) {
-				case RTF_PERLIN, RTF_PERLIN2, RTF_SIMPLEX, RTF_SIMPLEX2, RTF_PERLIN_RIDGE, RTF_SIMPLEX_RIDGE, RTF_BILLOW, RTF_CUBIC, RTF_WHITE, RTF_WORLEY, RTF_WORLEY_EDGE -> true;
+				case RTF_PERLIN, RTF_PERLIN2, RTF_PERLIN_FIXED, RTF_PERLIN2_FIXED, RTF_SIMPLEX, RTF_SIMPLEX2, RTF_PERLIN_RIDGE, RTF_SIMPLEX_RIDGE, RTF_BILLOW, RTF_CUBIC, RTF_WHITE, RTF_WORLEY, RTF_WORLEY_EDGE -> true;
 				default -> false;
 			};
 		}

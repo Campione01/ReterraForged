@@ -51,8 +51,8 @@ public class AdvancedContinentGenerator extends AbstractContinent implements Sim
     
     @Override
     public void apply(Cell cell, float x, float y) {
-        float wx = this.warp.getX(x, y, 0);
-        float wy = this.warp.getZ(x, y, 0);
+        float wx = this.warp.getRootX(x, y, 0);
+        float wy = this.warp.getRootZ(x, y, 0);
         x = wx * this.frequency;
         y = wy * this.frequency;
         int xi = NoiseUtil.floor(x);
@@ -161,10 +161,10 @@ public class AdvancedContinentGenerator extends AbstractContinent implements Sim
     protected float getCoastalDistanceValue(float x, float y, float distance) {
         if (distance > this.controlPoints.shallowOcean && distance < this.controlPoints.inland) {
             float alpha = distance / this.controlPoints.inland;
-            float cliff = this.cliffNoise.compute(x, y, 0);
+            float cliff = this.cliffNoise.computeRoot(x, y, 0);
             distance = NoiseUtil.lerp(distance * cliff, distance, alpha);
             if (distance < this.controlPoints.shallowOcean) {
-                distance = this.controlPoints.shallowOcean * this.bayNoise.compute(x, y, 0);
+                distance = this.controlPoints.shallowOcean * this.bayNoise.computeRoot(x, y, 0);
             }
         }
         return distance;

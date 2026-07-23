@@ -10,8 +10,21 @@ public record Abs(Noise input) implements Noise {
 	).apply(instance, Abs::new));
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		return Math.abs(this.input.compute(x, z, seed));
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input.supportsBulk();
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		this.input.fill(batch, seed, output);
+		for(int index = 0; index < output.length; index++) {
+			output[index] = Math.abs(output[index]);
+		}
 	}
 
 	@Override

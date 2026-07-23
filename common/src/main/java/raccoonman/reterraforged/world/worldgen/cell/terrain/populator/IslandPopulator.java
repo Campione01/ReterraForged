@@ -45,10 +45,10 @@ public class IslandPopulator implements CellPopulator {
     
     @Override
     public void apply(Cell cell, float x, float z) {
-    	float islandThresholdMin = this.islandThresholdNoise.compute(x, z, 0);
+	float islandThresholdMin = this.islandThresholdNoise.computeRoot(x, z, 0);
     	float islandThresholdMax = islandThresholdMin + 4.0F;
 
-    	float regionVarianceAlpha = cell.terrainRegionId > this.islandChanceVarianceNoise.compute(cell.continentX, cell.continentZ, 0) ? 0.0F : 1.0F;
+	float regionVarianceAlpha = cell.terrainRegionId > this.islandChanceVarianceNoise.computeRoot(cell.continentX, cell.continentZ, 0) ? 0.0F : 1.0F;
     	float regionEdgeAlpha = NoiseUtil.clamp(cell.terrainRegionEdge, islandThresholdMin, islandThresholdMax);
     	regionEdgeAlpha = NoiseUtil.map(regionEdgeAlpha, 0.0F, 1.0F, 2.0F);
     	

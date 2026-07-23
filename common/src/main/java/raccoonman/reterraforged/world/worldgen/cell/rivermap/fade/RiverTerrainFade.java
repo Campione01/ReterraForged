@@ -29,7 +29,11 @@ public final class RiverTerrainFade {
     }
 
     public static float mountainFade(Cell cell) {
-        if (!isMountain(cell)) {
+		return mountainFade(cell, isMountain(cell));
+	}
+
+    public static float mountainFade(Cell cell, boolean mountain) {
+        if (!mountain) {
             return 0.0F;
         }
         float edge = NoiseUtil.clamp(cell.terrainRegionEdge, 0.0F, MOUNTAIN_EDGE_SOFTNESS);
@@ -37,17 +41,26 @@ public final class RiverTerrainFade {
     }
 
     public static float valleyFade(Cell cell, float heightFade) {
-        float mountainFade = mountainFade(cell);
+		return valleyFade(heightFade, mountainFade(cell));
+	}
+
+    public static float valleyFade(float heightFade, float mountainFade) {
         return heightFade * NoiseUtil.lerp(1.0F, MOUNTAIN_VALLEY_FADE, mountainFade);
     }
 
     public static float banksFade(Cell cell, float heightFade) {
-        float mountainFade = mountainFade(cell);
+		return banksFade(heightFade, mountainFade(cell));
+	}
+
+    public static float banksFade(float heightFade, float mountainFade) {
         return heightFade * NoiseUtil.lerp(1.0F, MOUNTAIN_BANKS_FADE, mountainFade);
     }
 
     public static float bedFade(Cell cell, float heightFade) {
-        float mountainFade = mountainFade(cell);
+		return bedFade(heightFade, mountainFade(cell));
+	}
+
+    public static float bedFade(float heightFade, float mountainFade) {
         return heightFade * NoiseUtil.lerp(1.0F, MOUNTAIN_BED_FADE, mountainFade);
     }
 

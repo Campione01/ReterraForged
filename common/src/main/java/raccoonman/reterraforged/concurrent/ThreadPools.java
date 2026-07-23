@@ -28,10 +28,49 @@ public class ThreadPools {
 	};
 
 	private static Thread newWorkerThread(Runnable r) {
-		Thread thread = new Thread(RTF_GROUP, r, "RTF worker #" + THREAD_COUNTER.getAndIncrement());
+		WorkerThread thread = new WorkerThread(r, "RTF worker #" + THREAD_COUNTER.getAndIncrement());
 		thread.setDaemon(true);
 		thread.setPriority(Thread.NORM_PRIORITY - 1);
 		return thread;
+	}
+
+	public static final class WorkerThread extends Thread {
+		private Object rootNoiseSession;
+		private Object worldgenScratchOwner;
+		private Object worldgenScratch;
+
+		private WorkerThread(Runnable task, String name) {
+			super(RTF_GROUP, task, name);
+		}
+
+		public Object rootNoiseSession() {
+			return this.rootNoiseSession;
+		}
+
+		public void rootNoiseSession(Object rootNoiseSession) {
+			this.rootNoiseSession = rootNoiseSession;
+		}
+
+		public Object worldgenScratch(Object owner) {
+			return this.worldgenScratchOwner == owner ? this.worldgenScratch : null;
+		}
+
+		public void worldgenScratch(Object owner, Object scratch) {
+			this.worldgenScratchOwner = owner;
+			this.worldgenScratch = scratch;
+		}
+
+		public void clearWorldgenScratch() {
+			this.worldgenScratchOwner = null;
+			this.worldgenScratch = null;
+		}
+	}
+
+	public static void clearWorldgenScratch() {
+		Thread thread = Thread.currentThread();
+		if(thread instanceof WorkerThread worker) {
+			worker.clearWorldgenScratch();
+		}
 	}
 
 	public static synchronized void configureWorldGenThreads(int threadCount) {

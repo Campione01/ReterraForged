@@ -13,7 +13,7 @@ record Sin(float frequency, Noise alpha) implements Noise {
 	).apply(instance, Sin::new));
 
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
         float a = this.alpha.compute(x, z, seed);
         x *= this.frequency;
         z *= this.frequency;

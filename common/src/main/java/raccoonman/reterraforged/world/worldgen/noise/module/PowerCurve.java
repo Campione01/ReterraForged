@@ -31,7 +31,7 @@ record PowerCurve(Noise input, float power, float mid, float min, float max) imp
 	}
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		float input = this.input.compute(x, z, seed);
         if (input >= this.mid) {
             float part = input - this.mid;
@@ -41,6 +41,27 @@ record PowerCurve(Noise input, float power, float mid, float min, float max) imp
             input = this.mid - NoiseUtil.pow(part, this.power);
         }
         return NoiseUtil.map(input, this.min, this.max, this.max - this.min);
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input.supportsBulk();
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		this.input.fill(batch, seed, output);
+		for(int index = 0; index < output.length; index++) {
+			float input = output[index];
+			if(input >= this.mid) {
+				float part = input - this.mid;
+				input = this.mid + NoiseUtil.pow(part, this.power);
+			} else {
+				float part = this.mid - input;
+				input = this.mid - NoiseUtil.pow(part, this.power);
+			}
+			output[index] = NoiseUtil.map(input, this.min, this.max, this.max - this.min);
+		}
 	}
 
 	@Override

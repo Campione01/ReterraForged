@@ -12,10 +12,25 @@ record Invert(Noise input) implements Noise {
 	).apply(instance, Invert::new));
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		float min = this.input.minValue();
 		float max = this.input.maxValue();
 		return max - NoiseUtil.clamp(this.input.compute(x, z, seed), min, max);
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input.supportsBulk();
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		this.input.fill(batch, seed, output);
+		float min = this.input.minValue();
+		float max = this.input.maxValue();
+		for(int index = 0; index < output.length; index++) {
+			output[index] = max - NoiseUtil.clamp(output[index], min, max);
+		}
 	}
 
 	@Override

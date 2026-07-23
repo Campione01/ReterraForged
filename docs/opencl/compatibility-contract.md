@@ -45,4 +45,4 @@ This GPU boundary does not prohibit later CPU-side structural improvements to ot
 - Native CPU is the mandatory QUICK_V1 backend.
 - CPU and OpenCL canonical tile floats must match by raw bits before AUTO or ON can use the GPU.
 - Mixed per-tile CPU/GPU fallback is therefore seam-safe.
-- QUICK_V1 intentionally changes new-world cave output. Legacy seed/terrain continuity is out of scope; the preset UI retains `LEGACY` as an explicit alternate algorithm.
+- QUICK_V1 intentionally changes new-world cave output and remains opt-in. `LEGACY_V2` is the default cave route, preserves the original density graph, and must match `LEGACY` by raw bits.

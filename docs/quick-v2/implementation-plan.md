@@ -6,8 +6,9 @@ QUICK_V2 is a native CPU terrain-noise execution engine backed directly by the p
 `Alysara/quick-noise` revision `baae360ff02626b58ff56c7bd46087d024fa8407`.
 It replaces the scalar, point-at-a-time evaluation of RTF-owned 2D noise graphs
 with fixed-shape bulk evaluation while preserving legacy RTF node semantics and
-Minecraft-facing worldgen contracts. Exported-field quantization means it is not
-a byte-compatibility promise for already generated chunks at threshold boundaries.
+Minecraft-facing worldgen contracts. Terrain-root output must preserve the LEGACY
+Cell contract exactly because RTF turns small continuous differences into discrete
+continent, terrain, river, climate, and beach decisions.
 
 The first release targets Windows x86-64 and packages scalar, SSE4.2,
 AVX2+FMA, and AVX512+FMA native variants. QUICK_V2 requires SSE4.2; the scalar
@@ -44,15 +45,26 @@ QUICK_V2.
    immutable handle. A partially valid program is never executed.
 4. A fixed, globally aligned 2D grid is evaluated in one JNI call. Exact RTF
    primitives preserve Java floor, hash, seed, gradient/cell, interpolation,
-   octave, and range semantics. The Perlin families use quick-noise `ArchSimd`;
-   remaining exact opcodes share the native batch buffers.
-5. Each supported root and affine coordinate transform owns a thread-local
-   64x64 result tile with two cache slots. Normal generation, global terrain
-   scaling, and zoomed previews all use the same globally aligned lattice while
-   retaining the original 32x32-by-eight-slot float capacity.
-6. Java continues materializing the existing `Cell[]` and runs river networks,
+   octave, and range semantics. Dedicated program-version-6 opcodes distinguish
+   fixed-seed legacy `Perlin`/`Perlin2` from runtime-shifted primitives. The
+   Perlin families use quick-noise `ArchSimd`; remaining exact opcodes share the
+   native batch buffers.
+5. Production RTF batches use globally aligned 32x32 result tiles. Cache depth is
+   derived from the worker batch width; isolated compatibility tests retain the
+   64x64 constructor geometry. A tile value is admitted only when the caller
+   coordinate and prepared lattice coordinate have identical raw float bits.
+   Voronoi centers, climate edge offsets and other dynamic coordinates evaluate
+   the whole owning RTF operation through Java.
+6. Experimental root promotion is disabled by default. When explicitly enabled,
+   four completed production tiles must establish a sustained workload before
+   one tile of coverage is observed. Roots with the same observed coverage and
+   affine transform may then share a native program with at most 32 outputs.
+   Coverage collection is frozen immediately, local caches are versioned, and
+   active single-root programs remain valid until context close so concurrent
+   RTF/C2ME workers cannot observe a partially replaced program.
+7. Java continues materializing the existing `Cell[]` and runs river networks,
    structural erosion, biome routing, and tile filters unchanged.
-7. Unknown, third-party, structural, and dynamic-coordinate roots use the
+8. Unknown, third-party, structural, and dynamic-coordinate roots use the
    existing Java evaluator. Fallback is atomic for the whole root: nested child
    calls cannot re-enter QUICK_V2 and mix two fields. Decisions are cached for
    the lifetime of the generator context.
@@ -64,29 +76,38 @@ the CPU structural path.
 
 ## Public Configuration
 
-- Add `world.noiseEngine` with `QUICK_V2` and `LEGACY` values.
-- Missing values decode as `QUICK_V2`; copied and generated presets retain the
-  selected value.
+- Expose `world.noiseEngine` with `LEGACY`, `QUICK_V2`, and `LEGACY_V2`
+  values during comparative development.
+- Missing values and newly constructed presets default to `LEGACY_V2`; copied
+  presets retain any explicitly selected value.
 - Add the selector to the first world-settings UI page with English and Chinese
   labels and tooltips.
-- Keep `caves.densityAlgorithm` independent. QUICK_V2 may be combined with
-  QUICK_V1 or LEGACY caves.
+- Keep `caves.densityAlgorithm` independent. It exposes `LEGACY`,
+  `LEGACY_V2`, and `QUICK_V1`; missing values default to `LEGACY_V2`.
+  `QUICK_V1` remains an explicit new-world alternative.
 - Backend tuning remains automatic and is not exposed as terrain-shaping
   preset data. The selected native variant is reported at initialization and
   compiled/fallback graph counts are reported when a generator context closes.
+- `QUICK_V2` is the isolated whole-root compiled route documented here.
+  `LEGACY_V2` is governed separately by
+  `docs/architecture/RTF_LEGACY_V2.md` and must remain the original RTF
+  implementation optimized in place.
 
 ## Determinism and Failure Policy
 
-- Every exported QUICK_V2 field is quantized to `1/4096` after native graph
-  evaluation. Intermediates remain full `f32` precision.
+- QUICK_V2 terrain fields are exported without quantization. A graph is admitted
+  only when its complete native result preserves the same RTF semantics; otherwise
+  the whole root falls back to the Java evaluator.
 - QUICK_V1 retains raw-bit parity across its admitted scalar, AVX2, and AVX512
   CPU variants.
 - QUICK_V2 selects one SSE4.2, AVX2, or AVX512 backend at process startup and
-  never changes it while running. Exact RTF programs are bit-identical across
-  the packaged scalar/SSE4.2/AVX2/AVX512 variants after exported-field
-  quantization; this is checked during every native build.
+  never changes it while running. Admitted RTF programs must be bit-identical
+  across the packaged scalar/SSE4.2/AVX2/AVX512 variants; this is checked during
+  every native build.
 - Grid calls use one fixed shape and globally aligned coordinates. Affine and
-  warped sampling uses Batch evaluation over the same fixed tile shape.
+  warped sampling uses batch evaluation over the same fixed tile shape. Native
+  opcodes preserve Java branch short-circuits and floating-point operation order;
+  mathematically equivalent reassociation is not a valid optimization contract.
 - Missing native support or native runtime failure fails QUICK_V2 world setup
   clearly. It must not silently switch an existing world to LEGACY output.
 - Unsupported custom graph roots use the Java root fallback by design; this is
@@ -131,6 +152,21 @@ the CPU structural path.
 - Three repeated fixed-radius new-world runs complete without mixin failures,
   deadlocks, native leaks, missing modded biome palettes, invalid structure
   placement, or chunk/block hash variation.
+- The strict matrix covers default and personal-preset overviews, located river
+  detail, every active ocean/coast/hydrology/land/island terrain family,
+  native-scale erosion/smoothing/correction, six primitive runtime seeds, four
+  affine transforms and four far-coordinate seed windows. All stages have zero
+  raw float-bit, discrete and admitted-root mismatches. This gate completed on
+  2026-07-22.
+- Optional promoted multi-root programs are shadow-checked on subsequent
+  production tiles across deep/shallow ocean, coast, river, lake, wetland,
+  flatland, highland, island beach, island and island mountains for default,
+  archipelago and personal presets. The covered promoted path has zero root
+  mismatches. Its performance was not stable across processor constraints: one
+  balanced run measured a 3.29 percent gain, while the isolated eight-processor
+  rerun measured a 2.22 percent loss. Root promotion is therefore disabled by
+  default. Explicit opt-in uses a 32-root cap and waits for four completed tiles
+  before observing one tile, so short-lived previews never pay promotion costs.
 
 ## Evaluated References
 

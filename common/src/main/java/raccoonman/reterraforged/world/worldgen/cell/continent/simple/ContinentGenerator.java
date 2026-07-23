@@ -255,6 +255,6 @@ public abstract class ContinentGenerator implements SimpleContinent {
             return 1.0F;
         }
         float alpha = edgeValue / this.controlPoints.inland;
-        return this.shape.compute(x, z, 0) * alpha;
+        return this.shape.computeRoot(x, z, 0) * alpha;
     }
 }

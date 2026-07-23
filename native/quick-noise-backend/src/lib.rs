@@ -21,7 +21,7 @@ const QUANTIZATION: f32 = 4096.0;
 const ABI_VERSION: u32 = 2;
 
 const PROGRAM_MAGIC: u32 = u32::from_le_bytes(*b"QNV2");
-const PROGRAM_VERSION: u32 = 3;
+const PROGRAM_VERSION: u32 = 6;
 const PROGRAM_HEADER_BYTES: usize = 20;
 const PROGRAM_NODE_BYTES: usize = 48;
 
@@ -85,6 +85,12 @@ const OP_RTF_WORLEY: u32 = 41;
 const OP_RTF_WORLEY_EDGE: u32 = 42;
 const OP_RTF_SIN: u32 = 43;
 const OP_RTF_COS: u32 = 44;
+const OP_SUBTRACT: u32 = 45;
+const OP_ALPHA: u32 = 46;
+const OP_SIGNED_INT_POW: u32 = 47;
+const OP_SELECT: u32 = 48;
+const OP_RTF_PERLIN_FIXED: u32 = 49;
+const OP_RTF_PERLIN2_FIXED: u32 = 50;
 
 static NEXT_PROGRAM_HANDLE: AtomicU64 = AtomicU64::new(1);
 static PROGRAMS: OnceLock<RwLock<HashMap<u64, Arc<Program>>>> = OnceLock::new();
@@ -325,7 +331,8 @@ fn validate_node(
                 Err(())
             }
         }
-        OP_RTF_PERLIN | OP_RTF_PERLIN2 | OP_RTF_PERLIN_RIDGE | OP_RTF_BILLOW => {
+        OP_RTF_PERLIN | OP_RTF_PERLIN2 | OP_RTF_PERLIN_RIDGE | OP_RTF_BILLOW
+        | OP_RTF_PERLIN_FIXED | OP_RTF_PERLIN2_FIXED => {
             if (1..=32).contains(&input_a)
                 && valid_input(input_b)
                 && valid_input(input_c)
@@ -376,7 +383,7 @@ fn validate_node(
             }
         }
         OP_ADD | OP_MULTIPLY | OP_MIN | OP_MAX | OP_GREATER | OP_DIVIDE | OP_POW_DYNAMIC
-        | OP_GREATER_EQUAL => {
+        | OP_GREATER_EQUAL | OP_SUBTRACT | OP_ALPHA => {
             if valid_input(input_a) && valid_input(input_b) {
                 Ok(())
             } else {
@@ -384,14 +391,15 @@ fn validate_node(
             }
         }
         OP_ABS | OP_CLAMP | OP_MAP | OP_INVERT | OP_CURVE3 | OP_CURVE5 | OP_POW | OP_SIGNED_POW
-        | OP_BOOST | OP_STEPS | OP_SIN | OP_COS | OP_ROUND | OP_RTF_SIN | OP_RTF_COS => {
+        | OP_BOOST | OP_STEPS | OP_SIN | OP_COS | OP_ROUND | OP_RTF_SIN | OP_RTF_COS
+        | OP_SIGNED_INT_POW => {
             if valid_input(input_a) {
                 Ok(())
             } else {
                 Err(())
             }
         }
-        OP_LERP => {
+        OP_LERP | OP_SELECT => {
             if valid_input(input_a) && valid_input(input_b) && valid_input(input_c) {
                 Ok(())
             } else {
@@ -438,6 +446,8 @@ fn fill_program_2d(
                 OP_SIMPLEX_RIDGED => fill_ridged_simplex(&grid, inputs, seed, node, target),
                 OP_RTF_PERLIN => rtf_noise::fill_perlin(inputs, seed, node, target, false),
                 OP_RTF_PERLIN2 => rtf_noise::fill_perlin(inputs, seed, node, target, true),
+                OP_RTF_PERLIN_FIXED => rtf_noise::fill_perlin(inputs, 0, node, target, false),
+                OP_RTF_PERLIN2_FIXED => rtf_noise::fill_perlin(inputs, 0, node, target, true),
                 OP_RTF_SIMPLEX => rtf_noise::fill_simplex(inputs, seed, node, target, false),
                 OP_RTF_SIMPLEX2 => rtf_noise::fill_simplex(inputs, seed, node, target, true),
                 OP_RTF_PERLIN_RIDGE => {
@@ -450,7 +460,11 @@ fn fill_program_2d(
                 OP_RTF_WORLEY => rtf_noise::fill_worley(inputs, seed, node, target),
                 OP_RTF_WORLEY_EDGE => rtf_noise::fill_worley_edge(inputs, seed, node, target),
                 OP_ADD => apply_binary(inputs, node, target, |a, b| a + b),
+                OP_SUBTRACT => apply_binary(inputs, node, target, |a, b| a - b),
                 OP_MULTIPLY => apply_binary(inputs, node, target, |a, b| a * b),
+                OP_ALPHA => apply_binary(inputs, node, target, |input, alpha| {
+                    input * alpha + (1.0 - alpha)
+                }),
                 OP_MIN => apply_binary(inputs, node, target, f32::min),
                 OP_MAX => apply_binary(inputs, node, target, f32::max),
                 OP_ABS => apply_unary(inputs, node, target, f32::abs),
@@ -464,13 +478,9 @@ fn fill_program_2d(
                     let in_max = node.params[1];
                     let out_min = node.params[2];
                     let out_max = node.params[3];
-                    let scale = if in_max == in_min {
-                        0.0
-                    } else {
-                        (out_max - out_min) / (in_max - in_min)
-                    };
                     apply_unary(inputs, node, target, |value| {
-                        out_min + (value - in_min) * scale
+                        let alpha = (value - in_min) / (in_max - in_min);
+                        out_min + alpha * (out_max - out_min)
                     });
                 }
                 OP_INVERT => apply_unary(inputs, node, target, |value| 1.0 - value),
@@ -483,9 +493,12 @@ fn fill_program_2d(
                 OP_LERP => apply_ternary(inputs, node, target, |alpha, lower, upper| {
                     lower + alpha * (upper - lower)
                 }),
+                OP_SELECT => apply_ternary(inputs, node, target, |selector, lower, upper| {
+                    if selector != 0.0 { upper } else { lower }
+                }),
                 OP_POW => {
                     let power = node.params[0];
-                    apply_unary(inputs, node, target, |value| value.powf(power));
+                    apply_unary(inputs, node, target, |value| java_pow(value, power));
                 }
                 OP_GREATER => {
                     apply_binary(inputs, node, target, |a, b| if a > b { 1.0 } else { 0.0 })
@@ -498,24 +511,28 @@ fn fill_program_2d(
                         if b == 0.0 { 0.0 } else { a / b }
                     },
                 ),
-                OP_POW_DYNAMIC => {
-                    apply_binary(inputs, node, target, |value, power| value.powf(power))
-                }
-                OP_ROUND => apply_unary(inputs, node, target, f32::round),
+                OP_POW_DYNAMIC => apply_binary(inputs, node, target, java_pow),
+                OP_ROUND => apply_unary(inputs, node, target, java_round),
                 OP_GREATER_EQUAL => {
                     apply_binary(inputs, node, target, |a, b| if a >= b { 1.0 } else { 0.0 })
                 }
                 OP_SIGNED_POW => {
                     let power = node.params[0];
                     apply_unary(inputs, node, target, |value| {
-                        value.abs().powf(power).copysign(value)
+                        java_pow(value.abs(), power).copysign(value)
+                    });
+                }
+                OP_SIGNED_INT_POW => {
+                    let power = node.params[0] as i32;
+                    apply_unary(inputs, node, target, |value| {
+                        java_int_pow(value, power).copysign(value)
                     });
                 }
                 OP_BOOST => {
                     let iterations = node.params[0].clamp(1.0, 32.0) as usize;
                     apply_unary(inputs, node, target, |mut value| {
                         for _ in 0..iterations {
-                            value = value.powf(1.0 - value);
+                            value = java_pow(value, 1.0 - value);
                         }
                         value
                     });
@@ -554,7 +571,7 @@ fn fill_program_2d(
             let source = &scratch.buffers[root];
             let target = &mut output[root_index * sample_count..(root_index + 1) * sample_count];
             for (target, source) in target.iter_mut().zip(source) {
-                *target = quantize(*source);
+                *target = *source;
             }
         }
         Ok(())
@@ -918,6 +935,36 @@ fn quantize(value: f32) -> f32 {
     (value * QUANTIZATION).round() / QUANTIZATION
 }
 
+fn java_round(value: f32) -> f32 {
+    if value >= 0.0 {
+        (value + 0.5) as i32 as f32
+    } else {
+        (value - 0.5) as i32 as f32
+    }
+}
+
+fn java_pow(value: f32, power: f32) -> f32 {
+    (value as f64).powf(power as f64) as f32
+}
+
+fn java_int_pow(value: f32, power: i32) -> f32 {
+    match power {
+        0 => 1.0,
+        1 => value,
+        2 => value * value,
+        3 => value * value * value,
+        4 => value * value * value * value,
+        _ if power > 0 => {
+            let mut result = 1.0;
+            for _ in 0..power {
+                result *= value;
+            }
+            result
+        }
+        _ => java_pow(value, power as f32),
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn rtf_quick_noise_abi_version() -> u32 {
     ABI_VERSION
@@ -1142,6 +1189,17 @@ mod tests {
     }
 
     #[test]
+    fn java_round_preserves_rtf_half_step_boundaries() {
+        let below_positive_half = f32::from_bits(0x3eff_ffff);
+        let above_negative_half = f32::from_bits(0xbeff_ffff);
+
+        assert_eq!(java_round(below_positive_half), 1.0);
+        assert_eq!(java_round(above_negative_half), -1.0);
+        assert_eq!(java_round(0.49), 0.0);
+        assert_eq!(java_round(-0.49), 0.0);
+    }
+
+    #[test]
     fn quick_v2_program_lifecycle_is_deterministic() {
         let bytes = test_program_bytes();
         let mut handle = 0;
@@ -1246,7 +1304,7 @@ mod tests {
             .unwrap();
             let mut output = [0.0];
             fill_program_2d(&program, 0, 0, 0, 1, 1, &mut output).unwrap();
-            assert_eq!(output[0], quantize(expected));
+            assert_eq!(output[0], expected);
         }
     }
 

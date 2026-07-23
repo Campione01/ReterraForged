@@ -74,8 +74,8 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
     
     @Override
     public void apply(Cell cell, float x, float z) {
-        float value = this.cone.compute(x, z, 0);
-        float limit = this.height.compute(x, z, 0);
+        float value = this.cone.computeRoot(x, z, 0);
+        float limit = this.height.computeRoot(x, z, 0);
         float maxHeight = limit * this.inversionPoint;
         cell.weirdness = Weirdness.LOW_SLICE_NORMAL_DESCENDING.mid();
         cell.erosion = Erosion.LEVEL_4.mid();
@@ -89,11 +89,11 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
             }
             value = maxHeight - maxHeight / 5.0F * alpha;
         } else if (value < this.blendLower) {
-            value += this.lowlands.compute(x, z, 0);
+            value += this.lowlands.computeRoot(x, z, 0);
             cell.terrain = this.outer;
         } else if (value < this.blendUpper) {
             float alpha2 = 1.0F - (value - this.blendLower) / this.blendRange;
-            value += this.lowlands.compute(x, z, 0) * alpha2;
+            value += this.lowlands.computeRoot(x, z, 0) * alpha2;
             cell.terrain = this.outer;
         }
         cell.height = this.bias + value;

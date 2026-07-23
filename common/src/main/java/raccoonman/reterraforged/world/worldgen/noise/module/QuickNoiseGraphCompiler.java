@@ -1,7 +1,10 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import raccoonman.reterraforged.world.worldgen.noise.domain.AddWarp;
 import raccoonman.reterraforged.world.worldgen.noise.domain.CompoundWarp;
@@ -17,7 +20,54 @@ import raccoonman.reterraforged.world.worldgen.quicknoise.QuickNoiseGraph;
 import raccoonman.reterraforged.world.worldgen.quicknoise.QuickNoiseGraph.Opcode;
 
 public final class QuickNoiseGraphCompiler {
+	private static final Set<Class<? extends Noise>> RTF_NODE_TYPES = Set.of(
+		Abs.class,
+		Add.class,
+		AdvancedTerrace.class,
+		Alpha.class,
+		Billow.class,
+		Blend.class,
+		Boost.class,
+		Clamp.class,
+		Constant.class,
+		Cubic.class,
+		Curve.class,
+		Erosion.class,
+		Frequency.class,
+		Gradient.class,
+		Invert.class,
+		LegacyMoisture.class,
+		LegacyTemperature.class,
+		Line.class,
+		LinearSpline.class,
+		Map.class,
+		Max.class,
+		Min.class,
+		Multiply.class,
+		Perlin.class,
+		Perlin2.class,
+		PerlinRidge.class,
+		Power.class,
+		PowerCurve.class,
+		ShiftSeed.class,
+		Simplex.class,
+		Simplex2.class,
+		SimplexRidge.class,
+		Sin.class,
+		Steps.class,
+		Terrace.class,
+		Threshold.class,
+		Warp.class,
+		White.class,
+		Worley.class,
+		WorleyEdge.class
+	);
+
 	private QuickNoiseGraphCompiler() {
+	}
+
+	static boolean isRtfGraph(Noise noise) {
+		return RTF_NODE_TYPES.contains(unwrap(noise).getClass());
 	}
 
 	public static Optional<CompiledGraph> compile(Noise noise) {
@@ -25,16 +75,43 @@ public final class QuickNoiseGraphCompiler {
 	}
 
 	public static Optional<CompiledGraph> compile(Noise noise, float xScale, float xOffset, float zScale, float zOffset) {
+		return compileBatch(List.of(noise), xScale, xOffset, zScale, zOffset).map(batch -> {
+			Range range = batch.ranges().getFirst();
+			return new CompiledGraph(batch.graph(), range.minValue(), range.maxValue());
+		});
+	}
+
+	public static Optional<CompiledBatch> compileBatch(List<? extends Noise> noises) {
+		return compileBatch(noises, 1.0F, 0.0F, 1.0F, 0.0F);
+	}
+
+	public static Optional<CompiledBatch> compileBatch(List<? extends Noise> noises, float xScale, float xOffset, float zScale, float zOffset) {
+		if(noises.isEmpty() || noises.size() > 64) {
+			throw new IllegalArgumentException("A QUICK_V2 batch requires between 1 and 64 roots");
+		}
 		try {
 			Compiler compiler = new Compiler();
-			int root = compiler.compile(noise, compiler.rootCoordinates(xScale, xOffset, zScale, zOffset), 0L);
-			return Optional.of(new CompiledGraph(compiler.builder.build(root), noise.minValue(), noise.maxValue()));
+			Coordinates coordinates = compiler.rootCoordinates(xScale, xOffset, zScale, zOffset);
+			int[] roots = new int[noises.size()];
+			List<Range> ranges = new ArrayList<>(noises.size());
+			for(int index = 0; index < noises.size(); index++) {
+				Noise noise = noises.get(index);
+				roots[index] = compiler.compile(noise, coordinates, 0L);
+				ranges.add(new Range(noise.minValue(), noise.maxValue()));
+			}
+			return Optional.of(new CompiledBatch(compiler.builder.build(roots), List.copyOf(ranges)));
 		} catch(UnsupportedGraph ignored) {
 			return Optional.empty();
 		}
 	}
 
 	public record CompiledGraph(QuickNoiseGraph graph, float minValue, float maxValue) {
+	}
+
+	public record CompiledBatch(QuickNoiseGraph graph, List<Range> ranges) {
+	}
+
+	public record Range(float minValue, float maxValue) {
 	}
 
 	private static final class Compiler {
@@ -88,10 +165,10 @@ public final class QuickNoiseGraphCompiler {
 				return this.compile(frequency.input(), new Coordinates(scaledX, scaledZ), seedOffset);
 			}
 			if(noise instanceof Perlin perlin) {
-				return this.rtfPrimitive(Opcode.RTF_PERLIN, perlin.octaves(), coordinates, perlin.seed(), perlin.frequency(), perlin.lacunarity(), perlin.gain(), perlin.min(), perlin.max(), curveCode(perlin.interpolation()));
+				return this.rtfPrimitive(Opcode.RTF_PERLIN_FIXED, perlin.octaves(), coordinates, perlin.seed(), perlin.frequency(), perlin.lacunarity(), perlin.gain(), perlin.min(), perlin.max(), curveCode(perlin.interpolation()));
 			}
 			if(noise instanceof Perlin2 perlin) {
-				return this.rtfPrimitive(Opcode.RTF_PERLIN2, perlin.octaves(), coordinates, perlin.seed(), perlin.frequency(), perlin.lacunarity(), perlin.gain(), perlin.min(), perlin.max(), curveCode(perlin.interpolation()));
+				return this.rtfPrimitive(Opcode.RTF_PERLIN2_FIXED, perlin.octaves(), coordinates, perlin.seed(), perlin.frequency(), perlin.lacunarity(), perlin.gain(), perlin.min(), perlin.max(), curveCode(perlin.interpolation()));
 			}
 			if(noise instanceof Simplex simplex) {
 				return this.rtfPrimitive(Opcode.RTF_SIMPLEX, simplex.octaves(), coordinates, seedOffset, simplex.frequency(), simplex.lacunarity(), simplex.gain(), simplex.min(), simplex.max(), 0.0F);
@@ -189,13 +266,17 @@ public final class QuickNoiseGraphCompiler {
 				float mid = blend.alpha().minValue() + (blend.alpha().maxValue() - blend.alpha().minValue()) * blend.mid();
 				float lower = Math.max(blend.alpha().minValue(), mid - blend.range() * 0.5F);
 				float upper = Math.min(blend.alpha().maxValue(), mid + blend.range() * 0.5F);
-				int alpha = this.map(this.compile(blend.alpha(), coordinates, seedOffset), lower, upper, 0.0F, 1.0F);
-				alpha = this.builder.unary(Opcode.CLAMP, alpha, 0.0F, 1.0F, 0.0F, 0.0F);
+				int source = this.compile(blend.alpha(), coordinates, seedOffset);
+				int lowerValue = this.compile(blend.lower(), coordinates, seedOffset);
+				int upperValue = this.compile(blend.upper(), coordinates, seedOffset);
+				int alpha = this.divide(this.subtract(source, this.builder.constant(lower)), this.builder.constant(upper - lower));
 				alpha = this.curve(alpha, blend.interpolation());
-				return this.builder.ternary(Opcode.LERP, alpha, this.compile(blend.lower(), coordinates, seedOffset), this.compile(blend.upper(), coordinates, seedOffset));
+				int mixed = this.builder.ternary(Opcode.LERP, alpha, lowerValue, upperValue);
+				int middleOrUpper = this.builder.ternary(Opcode.SELECT, this.builder.binary(Opcode.GREATER, source, this.builder.constant(upper)), mixed, upperValue);
+				return this.builder.ternary(Opcode.SELECT, this.builder.binary(Opcode.GREATER, this.builder.constant(lower), source), middleOrUpper, lowerValue);
 			}
 			if(noise instanceof Alpha alpha) {
-				return this.builder.ternary(Opcode.LERP, this.compile(alpha.alpha(), coordinates, seedOffset), this.builder.constant(1.0F), this.compile(alpha.input(), coordinates, seedOffset));
+				return this.builder.binary(Opcode.ALPHA, this.compile(alpha.input(), coordinates, seedOffset), this.compile(alpha.alpha(), coordinates, seedOffset));
 			}
 			if(noise instanceof Boost boost) {
 				return this.builder.unary(Opcode.BOOST, this.compile(boost.input(), coordinates, seedOffset), boost.iterations(), 0.0F, 0.0F, 0.0F);
@@ -209,7 +290,7 @@ public final class QuickNoiseGraphCompiler {
 			}
 			if(noise instanceof Threshold threshold) {
 				int selector = this.builder.binary(Opcode.GREATER, this.compile(threshold.input(), coordinates, seedOffset), this.compile(threshold.threshold(), coordinates, seedOffset));
-				return this.builder.ternary(Opcode.LERP, selector, this.compile(threshold.lower(), coordinates, seedOffset), this.compile(threshold.upper(), coordinates, seedOffset));
+				return this.builder.ternary(Opcode.SELECT, selector, this.compile(threshold.lower(), coordinates, seedOffset), this.compile(threshold.upper(), coordinates, seedOffset));
 			}
 			if(noise instanceof LegacyMoisture moisture) {
 				int source = this.compile(moisture.source(), coordinates, seedOffset);
@@ -217,14 +298,14 @@ public final class QuickNoiseGraphCompiler {
 					return source;
 				}
 				source = this.map(source, 0.0F, 1.0F, -1.0F, 1.0F);
-				source = this.builder.unary(Opcode.SIGNED_POW, source, moisture.power(), 0.0F, 0.0F, 0.0F);
+				source = this.builder.unary(Opcode.SIGNED_INT_POW, source, moisture.power(), 0.0F, 0.0F, 0.0F);
 				return this.map(source, -1.0F, 1.0F, 0.0F, 1.0F);
 			}
 			if(noise instanceof LegacyTemperature temperature) {
 				int value = this.builder.binary(Opcode.MULTIPLY, this.coordinateZ(coordinates), this.builder.constant(temperature.frequency()));
 				value = this.builder.unary(Opcode.RTF_SIN, value);
 				value = this.builder.unary(Opcode.CLAMP, value, -1.0F, 1.0F, 0.0F, 0.0F);
-				value = this.builder.unary(Opcode.SIGNED_POW, value, temperature.power(), 0.0F, 0.0F, 0.0F);
+				value = this.builder.unary(Opcode.SIGNED_INT_POW, value, temperature.power(), 0.0F, 0.0F, 0.0F);
 				return this.map(value, -1.0F, 1.0F, 0.0F, 1.0F);
 			}
 			if(noise instanceof LinearSpline spline) {
@@ -258,8 +339,8 @@ public final class QuickNoiseGraphCompiler {
 			int middlePower = this.subtract(one, this.builder.binary(Opcode.MULTIPLY, strength, alpha));
 			int middle = this.builder.binary(Opcode.POW_DYNAMIC, input, middlePower);
 			int below = this.builder.binary(Opcode.POW_DYNAMIC, input, belowPower);
-			int result = this.builder.ternary(Opcode.LERP, this.builder.binary(Opcode.GREATER, lower, input), middle, below);
-			return this.builder.ternary(Opcode.LERP, this.builder.binary(Opcode.GREATER, input, upper), result, input);
+			int result = this.builder.ternary(Opcode.SELECT, this.builder.binary(Opcode.GREATER, lower, input), middle, below);
+			return this.builder.ternary(Opcode.SELECT, this.builder.binary(Opcode.GREATER, input, upper), result, input);
 		}
 
 		private int terrace(Terrace terrace, Coordinates coordinates, long seedOffset) {
@@ -281,7 +362,7 @@ public final class QuickNoiseGraphCompiler {
 					? this.builder.constant(value)
 					: this.terraceSegment(input, rampNoise, cliffNoise, rampHeight, value, value - bound, value + bound, value + spacing);
 				int selector = this.builder.binary(Opcode.GREATER_EQUAL, input, this.builder.constant((float) index / stepCount));
-				result = this.builder.ternary(Opcode.LERP, selector, result, candidate);
+				result = this.builder.ternary(Opcode.SELECT, selector, result, candidate);
 			}
 			return result;
 		}
@@ -293,7 +374,8 @@ public final class QuickNoiseGraphCompiler {
 			int ramp = this.subtract(one, this.builder.binary(Opcode.MULTIPLY, rampNoise, this.builder.constant(0.5F)));
 			int rampAlpha = this.divide(this.subtract(alpha, ramp), this.subtract(one, ramp));
 			rampAlpha = this.builder.unary(Opcode.CLAMP, rampAlpha, 0.0F, 1.0F, 0.0F, 0.0F);
-			int result = this.builder.binary(Opcode.ADD, this.builder.constant(value), this.builder.binary(Opcode.MULTIPLY, this.builder.constant(next - value), this.builder.binary(Opcode.MULTIPLY, rampAlpha, rampHeight)));
+			int rampValue = this.builder.binary(Opcode.MULTIPLY, this.builder.constant(next - value), rampAlpha);
+			int result = this.builder.binary(Opcode.ADD, this.builder.constant(value), this.builder.binary(Opcode.MULTIPLY, rampValue, rampHeight));
 			int cliff = this.subtract(one, this.builder.binary(Opcode.MULTIPLY, cliffNoise, this.builder.constant(0.5F)));
 			int cliffAlpha = this.divide(this.subtract(alpha, cliff), this.subtract(one, cliff));
 			cliffAlpha = this.builder.unary(Opcode.CLAMP, cliffAlpha, 0.0F, 1.0F, 0.0F, 0.0F);
@@ -317,10 +399,10 @@ public final class QuickNoiseGraphCompiler {
 			float divisor = terrace.source().maxValue() + terrace.modulation().maxValue();
 			result = this.divide(this.builder.binary(Opcode.ADD, result, modulation), this.builder.constant(divisor));
 			int alpha = this.divide(this.subtract(source, this.builder.constant(terrace.blendMin())), this.builder.constant(terrace.blendMax() - terrace.blendMin()));
-			alpha = this.builder.ternary(Opcode.LERP, this.builder.binary(Opcode.GREATER, source, this.builder.constant(terrace.blendMax())), alpha, this.builder.constant(1.0F));
+			alpha = this.builder.ternary(Opcode.SELECT, this.builder.binary(Opcode.GREATER, source, this.builder.constant(terrace.blendMax())), alpha, this.builder.constant(1.0F));
 			alpha = this.builder.binary(Opcode.MULTIPLY, alpha, mask);
 			int terraced = this.builder.ternary(Opcode.LERP, alpha, source, result);
-			return this.builder.ternary(Opcode.LERP, this.builder.binary(Opcode.GREATER, source, this.builder.constant(terrace.blendMin())), source, terraced);
+			return this.builder.ternary(Opcode.SELECT, this.builder.binary(Opcode.GREATER, source, this.builder.constant(terrace.blendMin())), source, terraced);
 		}
 
 		private int linearSpline(LinearSpline spline, Coordinates coordinates, long seedOffset) {
@@ -336,7 +418,7 @@ public final class QuickNoiseGraphCompiler {
 				alpha = this.builder.unary(Opcode.CLAMP, alpha, 0.0F, 1.0F, 0.0F, 0.0F);
 				int candidate = this.builder.ternary(Opcode.LERP, alpha, this.compile(start.getSecond(), coordinates, seedOffset), this.compile(end.getSecond(), coordinates, seedOffset));
 				int selector = this.builder.binary(Opcode.GREATER, input, this.builder.constant(start.getFirst()));
-				result = this.builder.ternary(Opcode.LERP, selector, result, candidate);
+				result = this.builder.ternary(Opcode.SELECT, selector, result, candidate);
 			}
 			return result;
 		}
@@ -369,13 +451,13 @@ public final class QuickNoiseGraphCompiler {
 				value = this.builder.binary(Opcode.MULTIPLY, value, feather);
 			}
 			int inside = this.builder.binary(Opcode.GREATER_EQUAL, radius, distance);
-			return this.builder.ternary(Opcode.LERP, inside, this.builder.constant(0.0F), value);
+			return this.builder.ternary(Opcode.SELECT, inside, this.builder.constant(0.0F), value);
 		}
 
 		private int fadeFactor(int distanceSquared, int fade, float lengthSquared) {
 			int distance = this.builder.binary(Opcode.MULTIPLY, fade, this.builder.constant(lengthSquared));
 			int candidate = this.builder.binary(Opcode.MIN, this.builder.constant(1.0F), this.divide(distanceSquared, distance));
-			return this.builder.ternary(Opcode.LERP, this.builder.binary(Opcode.GREATER, fade, this.builder.constant(0.0F)), this.builder.constant(1.0F), candidate);
+			return this.builder.ternary(Opcode.SELECT, this.builder.binary(Opcode.GREATER, fade, this.builder.constant(0.0F)), this.builder.constant(1.0F), candidate);
 		}
 
 		private int distanceSquared(int x, int z, float pointX, float pointZ) {
@@ -389,7 +471,7 @@ public final class QuickNoiseGraphCompiler {
 		}
 
 		private int subtract(int first, int second) {
-			return this.builder.binary(Opcode.ADD, first, this.builder.binary(Opcode.MULTIPLY, second, this.builder.constant(-1.0F)));
+			return this.builder.binary(Opcode.SUBTRACT, first, second);
 		}
 
 		private int divide(int numerator, int denominator) {

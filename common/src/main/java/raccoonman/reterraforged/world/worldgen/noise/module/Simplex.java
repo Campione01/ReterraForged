@@ -25,7 +25,7 @@ public record Simplex(float frequency, int octaves, float lacunarity, float gain
     }
     
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
         x *= this.frequency;
         z *= this.frequency;
         float sum = 0.0F;
@@ -38,6 +38,11 @@ public record Simplex(float frequency, int octaves, float lacunarity, float gain
         }
         return NoiseUtil.map(sum, this.min, this.max, (this.max - this.min));
     }
+
+	@Override
+	public boolean supportsBulk() {
+		return true;
+	}
 
 	@Override
 	public float minValue() {

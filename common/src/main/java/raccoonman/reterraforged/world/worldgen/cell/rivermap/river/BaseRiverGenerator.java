@@ -5,10 +5,12 @@ import java.util.List;
 import java.util.Random;
 
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
+import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.cell.continent.Continent;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.RiverGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.LegacyV2Rivermap;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.lake.Lake;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.lake.LakeConfig;
@@ -30,6 +32,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     protected WetlandConfig wetland;
     protected T continent;
     protected Levels levels;
+    protected final boolean boundedChildNetworks;
     
     public BaseRiverGenerator(T continent, GeneratorContext context) {
         this.continent = continent;
@@ -42,6 +45,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         this.fork = RiverConfig.builder(context.levels).bankHeight(context.preset.rivers().branchRivers.minBankHeight, context.preset.rivers().branchRivers.maxBankHeight).bankWidth(context.preset.rivers().branchRivers.bankWidth).bedWidth(context.preset.rivers().branchRivers.bedWidth).bedDepth(context.preset.rivers().branchRivers.bedDepth).fade(context.preset.rivers().branchRivers.fade).length(4500).order(1).build();
         this.wetland = new WetlandConfig(context.preset.rivers().wetlands);
         this.lake = LakeConfig.of(context.preset.rivers().lakes, context.levels);
+        this.boundedChildNetworks = context.preset.world().noiseEngine == WorldSettings.NoiseEngine.LEGACY_V2;
     }
     
     @Override
@@ -56,8 +60,18 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         for (Network.Builder river : rivers) {
             this.generateWetlands(river, random);
         }
-        Network[] networks = rivers.stream().map(Network.Builder::build).toArray(Network[]::new);
-        return new Rivermap(x, z, networks, warp);
+        Network[] networks = rivers.stream().map(this::buildNetwork).toArray(Network[]::new);
+        return this.createRivermap(x, z, networks, warp);
+    }
+
+    protected Network buildNetwork(Network.Builder builder) {
+        return this.boundedChildNetworks ? builder.buildBounded() : builder.build();
+    }
+
+    protected Rivermap createRivermap(int x, int z, Network[] networks, GenWarp warp) {
+        return this.boundedChildNetworks
+            ? new LegacyV2Rivermap(x, z, networks, warp)
+            : new Rivermap(x, z, networks, warp);
     }
     
     public List<Network.Builder> generateRoots(int x, int z, Random random, GenWarp warp) {

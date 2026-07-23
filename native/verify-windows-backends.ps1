@@ -245,9 +245,9 @@ public static class QuickNoiseBackendParity {
         using (MemoryStream stream = new MemoryStream())
         using (BinaryWriter writer = new BinaryWriter(stream)) {
             writer.Write(0x32564E51U);
-            writer.Write(3U);
-            writer.Write(31U);
-            writer.Write(13U);
+			writer.Write(6U);
+			writer.Write(33U);
+			writer.Write(15U);
             writer.Write(48U);
             WriteNode(writer, 1, 4, -1, -1, 0x514E5632L, 1F / 64F, 2F, 0.5F, 1F, 1F, 1F);
             WriteNode(writer, 2, 4, -1, -1, 0x56414C55L, 1F / 96F, 2.1F, 0.45F, 0.8F, 1F, 1F);
@@ -280,7 +280,9 @@ public static class QuickNoiseBackendParity {
             WriteNode(writer, 42, 1, 16, 17, 0x45444745L, 1F / 109F, 0.9F, 3F, 2F, 0F, 1F);
             WriteNode(writer, 43, 16, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
             WriteNode(writer, 44, 17, -1, -1, 0L, 0F, 0F, 0F, 0F, 0F, 0F);
-            for (uint root = 18; root < 31; root++) {
+			WriteNode(writer, 49, 4, 16, 17, 0x46504552L, 1F / 113F, 2.15F, 0.51F, -1F, 1F, 1F);
+			WriteNode(writer, 50, 4, 16, 17, 0x46504532L, 1F / 127F, 1.85F, 0.49F, -1F, 1F, 2F);
+            for (uint root = 18; root < 33; root++) {
                 writer.Write(root);
             }
             return stream.ToArray();

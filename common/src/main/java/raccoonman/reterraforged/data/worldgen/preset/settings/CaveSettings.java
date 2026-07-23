@@ -6,6 +6,8 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.util.StringRepresentable;
 
 public class CaveSettings {
+	public static final DensityAlgorithm DEFAULT_DENSITY_ALGORITHM = DensityAlgorithm.LEGACY_V2;
+
 	public static final Codec<CaveSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 		Codec.FLOAT.fieldOf("entranceCaveProbability").forGetter((o) -> o.entranceCaveProbability),
 		Codec.FLOAT.fieldOf("cheeseCaveDepthOffset").forGetter((o) -> o.cheeseCaveDepthOffset),
@@ -17,7 +19,7 @@ public class CaveSettings {
 		Codec.FLOAT.fieldOf("ravineCarverProbability").forGetter((o) -> o.ravineCarverProbability),
 		Codec.BOOL.fieldOf("largeOreVeins").forGetter((o) -> o.largeOreVeins),
 		Codec.BOOL.fieldOf("legacyCarverDistribution").forGetter((o) -> o.legacyCarverDistribution),
-		DensityAlgorithm.CODEC.optionalFieldOf("densityAlgorithm", DensityAlgorithm.QUICK_V1).forGetter((o) -> o.densityAlgorithm),
+		DensityAlgorithm.CODEC.optionalFieldOf("densityAlgorithm", DEFAULT_DENSITY_ALGORITHM).forGetter((o) -> o.densityAlgorithm),
 		CompatibilityMode.CODEC.optionalFieldOf("compatibilityMode", CompatibilityMode.AUTO).forGetter((o) -> o.compatibilityMode)
 	).apply(instance, CaveSettings::new));
 
@@ -38,11 +40,11 @@ public class CaveSettings {
 	public boolean minCaveBiomeDepth;
 
 	public CaveSettings(float entranceCaveProbability, float cheeseCaveDepthOffset, float cheeseCaveProbability, float spaghettiCaveProbability, float noodleCaveProbability, float caveCarverProbability, float deepCaveCarverProbability, float ravineProbability, boolean largeOreVeins, boolean legacyCarverDistribution) {
-		this(entranceCaveProbability, cheeseCaveDepthOffset, cheeseCaveProbability, spaghettiCaveProbability, noodleCaveProbability, caveCarverProbability, deepCaveCarverProbability, ravineProbability, largeOreVeins, legacyCarverDistribution, DensityAlgorithm.QUICK_V1, CompatibilityMode.AUTO);
+		this(entranceCaveProbability, cheeseCaveDepthOffset, cheeseCaveProbability, spaghettiCaveProbability, noodleCaveProbability, caveCarverProbability, deepCaveCarverProbability, ravineProbability, largeOreVeins, legacyCarverDistribution, DEFAULT_DENSITY_ALGORITHM, CompatibilityMode.AUTO);
 	}
 
 	public CaveSettings(float entranceCaveProbability, float cheeseCaveDepthOffset, float cheeseCaveProbability, float spaghettiCaveProbability, float noodleCaveProbability, float caveCarverProbability, float deepCaveCarverProbability, float ravineProbability, boolean largeOreVeins, boolean legacyCarverDistribution, CompatibilityMode compatibilityMode) {
-		this(entranceCaveProbability, cheeseCaveDepthOffset, cheeseCaveProbability, spaghettiCaveProbability, noodleCaveProbability, caveCarverProbability, deepCaveCarverProbability, ravineProbability, largeOreVeins, legacyCarverDistribution, DensityAlgorithm.QUICK_V1, compatibilityMode);
+		this(entranceCaveProbability, cheeseCaveDepthOffset, cheeseCaveProbability, spaghettiCaveProbability, noodleCaveProbability, caveCarverProbability, deepCaveCarverProbability, ravineProbability, largeOreVeins, legacyCarverDistribution, DEFAULT_DENSITY_ALGORITHM, compatibilityMode);
 	}
 
 	public CaveSettings(float entranceCaveProbability, float cheeseCaveDepthOffset, float cheeseCaveProbability, float spaghettiCaveProbability, float noodleCaveProbability, float caveCarverProbability, float deepCaveCarverProbability, float ravineProbability, boolean largeOreVeins, boolean legacyCarverDistribution, DensityAlgorithm densityAlgorithm, CompatibilityMode compatibilityMode) {
@@ -56,7 +58,7 @@ public class CaveSettings {
 		this.ravineCarverProbability = ravineProbability;
 		this.largeOreVeins = largeOreVeins;
 		this.legacyCarverDistribution = legacyCarverDistribution;
-		this.densityAlgorithm = densityAlgorithm != null ? densityAlgorithm : DensityAlgorithm.QUICK_V1;
+		this.densityAlgorithm = densityAlgorithm != null ? densityAlgorithm : DEFAULT_DENSITY_ALGORITHM;
 		this.compatibilityMode = compatibilityMode != null ? compatibilityMode : CompatibilityMode.AUTO;
 	}
 	
@@ -65,8 +67,9 @@ public class CaveSettings {
 	}
 
 	public enum DensityAlgorithm implements StringRepresentable {
-		QUICK_V1("QUICK_V1"),
-		LEGACY("LEGACY");
+		LEGACY("LEGACY"),
+		LEGACY_V2("LEGACY_V2"),
+		QUICK_V1("QUICK_V1");
 
 		public static final Codec<DensityAlgorithm> CODEC = StringRepresentable.fromEnum(DensityAlgorithm::values);
 

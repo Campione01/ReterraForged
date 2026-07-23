@@ -36,6 +36,10 @@ public final class OpenClManager {
 		return getRuntime() != null;
 	}
 
+	public static boolean isEnabledByConfig() {
+		return getConfig().mode() != OpenClConfig.Mode.OFF;
+	}
+
 	static int minimumBatchSize() {
 		return getConfig().minimumBatchSize();
 	}
@@ -256,12 +260,12 @@ public final class OpenClManager {
 				if(current == null && !initializationAttempted) {
 					initializationAttempted = true;
 					if(!hasLwjglCore()) {
-						RTFCommon.LOGGER.info("RTF OpenCL is unavailable because this runtime does not provide LWJGL core; QUICK_V1 will use native CPU");
+						RTFCommon.LOGGER.info("RTF OpenCL is unavailable because this runtime does not provide LWJGL core; density generation will use CPU backends");
 						current = null;
 					} else try {
 						current = OpenClRuntime.open(currentConfig);
 					} catch(Throwable unavailableBinding) {
-						RTFCommon.LOGGER.warn("RTF OpenCL binding is unavailable; QUICK_V1 will use native CPU ({})", unavailableBinding.toString());
+						RTFCommon.LOGGER.warn("RTF OpenCL binding is unavailable; density generation will use CPU backends ({})", unavailableBinding.toString());
 						RTFCommon.LOGGER.debug("RTF OpenCL binding failure", unavailableBinding);
 						current = null;
 					}

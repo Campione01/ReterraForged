@@ -13,8 +13,21 @@ record Curve(Noise input, CurveFunction curveFunction) implements Noise {
 	).apply(instance, Curve::new));
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		return this.curveFunction.apply(this.input.compute(x, z, seed));
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input.supportsBulk();
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		this.input.fill(batch, seed, output);
+		for(int index = 0; index < output.length; index++) {
+			output[index] = this.curveFunction.apply(output[index]);
+		}
 	}
 
 	@Override

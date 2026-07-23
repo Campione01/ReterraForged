@@ -8,8 +8,10 @@ import raccoonman.reterraforged.world.worldgen.cell.continent.IslandPopulator;
 import raccoonman.reterraforged.world.worldgen.noise.function.DistanceFunction;
 
 public class WorldSettings {
+	public static final NoiseEngine DEFAULT_NOISE_ENGINE = NoiseEngine.LEGACY_V2;
+
 	public static final Codec<WorldSettings> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-		NoiseEngine.CODEC.optionalFieldOf("noiseEngine", NoiseEngine.QUICK_V2).forGetter((o) -> o.noiseEngine),
+		NoiseEngine.CODEC.optionalFieldOf("noiseEngine", DEFAULT_NOISE_ENGINE).forGetter((o) -> o.noiseEngine),
 		Continent.CODEC.fieldOf("continent").forGetter((o) -> o.continent),
 		ControlPoints.CODEC.fieldOf("controlPoints").forGetter((o) -> o.controlPoints),
 		Properties.CODEC.fieldOf("properties").forGetter((o) -> o.properties)
@@ -21,11 +23,11 @@ public class WorldSettings {
     public Properties properties;
     
     public WorldSettings(Continent continent, ControlPoints controlPoints, Properties properties) {
-		this(NoiseEngine.QUICK_V2, continent, controlPoints, properties);
+		this(DEFAULT_NOISE_ENGINE, continent, controlPoints, properties);
 	}
 
 	public WorldSettings(NoiseEngine noiseEngine, Continent continent, ControlPoints controlPoints, Properties properties) {
-		this.noiseEngine = noiseEngine != null ? noiseEngine : NoiseEngine.QUICK_V2;
+		this.noiseEngine = noiseEngine != null ? noiseEngine : DEFAULT_NOISE_ENGINE;
         this.continent = continent;
         this.controlPoints = controlPoints;
         this.properties = properties;
@@ -36,8 +38,9 @@ public class WorldSettings {
     }
 
 	public enum NoiseEngine implements StringRepresentable {
+		LEGACY("legacy"),
 		QUICK_V2("quick_v2"),
-		LEGACY("legacy");
+		LEGACY_V2("legacy_v2");
 
 		public static final Codec<NoiseEngine> CODEC = StringRepresentable.fromEnum(NoiseEngine::values);
 		private final String name;

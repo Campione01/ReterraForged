@@ -17,7 +17,7 @@ public record Steps(Noise input, Noise steps, Noise slopeMin, Noise slopeMax, Cu
 	).apply(instance, Steps::new));
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		float noiseValue = this.input.compute(x, z, seed);
         float min = this.slopeMin.compute(x, z, seed);
         float max = this.slopeMax.compute(x, z, seed);

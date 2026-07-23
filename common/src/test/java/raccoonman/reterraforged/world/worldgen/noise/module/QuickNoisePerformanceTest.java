@@ -32,7 +32,7 @@ class QuickNoisePerformanceTest {
 		float quick = 0.0F;
 		try(QuickNoiseRuntime.Engine engine = new QuickNoiseRuntime.Engine(); QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(engine)) {
 			QuickNoiseRuntime.prepareSample(4096, -4096);
-			graph.compute(4096.0F, -4096.0F, 0);
+			graph.computeRoot(4096.0F, -4096.0F, 0);
 			for(int round = 0; round < BENCHMARK_ROUNDS; round++) {
 				if((round & 1) == 0) {
 					long start = System.nanoTime();
@@ -72,7 +72,7 @@ class QuickNoisePerformanceTest {
 						for(int dx = 0; dx < 16; dx++) {
 							int x = originX + chunkX * 16 + dx;
 							int z = originZ + chunkZ * 16 + dz;
-							sum += noise.computeLegacy(x, z, 0);
+							sum += noise.compute(x, z, 0);
 						}
 					}
 				}
@@ -93,7 +93,7 @@ class QuickNoisePerformanceTest {
 							int x = originX + chunkX * 16 + dx;
 							int z = originZ + chunkZ * 16 + dz;
 							QuickNoiseRuntime.prepareSample(x, z);
-							sum += noise.compute(x, z, 0);
+							sum += noise.computeRoot(x, z, 0);
 						}
 					}
 				}

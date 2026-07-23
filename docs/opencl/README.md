@@ -11,6 +11,6 @@ This directory is the source of truth for the QUICK_V1 CPU/OpenCL backend.
 
 ## Current Scope
 
-The backend accelerates only QUICK_V1's deterministic 3D cave field. RTF 2D terrain fields, biomes, structures, beardifier effects, aquifers, surface rules, block placement, rivers, erosion, climate, and third-party custom density functions remain on their existing CPU paths.
+The QUICK_V1 backend accelerates only its deterministic 3D cave field. The generic admitted-density path can also accelerate supported interpolated children of the legacy graph. RTF 2D terrain fields, biomes, structures, beardifier effects, aquifers, surface rules, block placement, rivers, erosion, climate, and third-party custom density functions remain on their existing CPU paths.
 
-OpenCL is optional. A missing binding/device, busy queue, failed exact-parity gate, AUTO performance rejection, or runtime error computes the same tile through pinned quick-noise native SIMD. QUICK_V1 is a new-world algorithm and does not promise legacy seed/output compatibility.
+OpenCL is optional and defaults to `OFF`. `AUTO` and `ON` are explicit opt-in modes. A missing binding/device, busy queue, failed exact-parity gate, AUTO performance rejection, or runtime error uses the matching CPU path. `LEGACY_V2` is the default cave mode and remains raw-bit equivalent to `LEGACY`; QUICK_V1 is a new-world algorithm and does not promise legacy seed/output compatibility.

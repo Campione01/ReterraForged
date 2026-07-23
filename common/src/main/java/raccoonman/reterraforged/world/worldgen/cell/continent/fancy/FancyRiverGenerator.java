@@ -37,11 +37,11 @@ public class FancyRiverGenerator extends BaseRiverGenerator<FancyContinentGenera
 		for (Island island : ((FancyContinentGenerator) this.continent).getSource().getIslands()) {
 			this.generateRoots(((FancyContinentGenerator) this.continent).getSource(), island, random, warp, roots);
 			for (Network.Builder river : roots) {
-				networks.add(river.build());
+				networks.add(this.buildNetwork(river));
 			}
 			roots.clear();
 		}
-		return new Rivermap(x, z, networks.toArray(Network[]::new), warp);
+		return this.createRivermap(x, z, networks.toArray(Network[]::new), warp);
 	}
 
 	private void generateRoots(FancyContinent continent, Island island, Random random, GenWarp warp, List<Network.Builder> roots) {

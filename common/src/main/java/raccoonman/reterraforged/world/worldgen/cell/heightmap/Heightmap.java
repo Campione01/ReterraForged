@@ -34,7 +34,7 @@ import raccoonman.reterraforged.world.worldgen.noise.function.EdgeFunction;
 import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
-import raccoonman.reterraforged.world.worldgen.noise.module.QuickNoiseRuntime;
+import raccoonman.reterraforged.world.worldgen.noise.module.NoiseRootRuntime;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 public record Heightmap(CellPopulator terrain, CellPopulator region, Continent continent, Climate climate, Levels levels, ControlPoints controlPoints, float terrainFrequency, Noise beachNoise, FakeWaterBiomeResolver fakeWaterBiomeResolver) {
@@ -50,10 +50,10 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 	
 	public void applyTerrain(Cell cell, float x, float z) {
         cell.terrain = TerrainType.FLATS;
-        cell.beachNoise = this.beachNoise.compute(x, z, 0);
+        cell.beachNoise = this.beachNoise.computeRoot(x, z, 0);
         this.continent.apply(cell, x, z);
         this.region.apply(cell, x, z);
-		try(QuickNoiseRuntime.CoordinateScope ignored = QuickNoiseRuntime.scaleCoordinates(this.terrainFrequency)) {
+		try(NoiseRootRuntime.CoordinateScope ignored = NoiseRootRuntime.scaleCoordinates(this.terrainFrequency)) {
 			this.terrain.apply(cell, x * this.terrainFrequency, z * this.terrainFrequency);
 		}
 	}

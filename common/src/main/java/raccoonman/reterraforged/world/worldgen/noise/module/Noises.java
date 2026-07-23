@@ -438,8 +438,18 @@ public class Noises {
 	public record HolderHolder(Holder<Noise> holder) implements Noise {
 		
 		@Override
-		public float computeLegacy(float x, float z, int seed) {
+		public float compute(float x, float z, int seed) {
 			return this.holder.value().compute(x, z, seed);
+		}
+
+		@Override
+		public boolean supportsBulk() {
+			return this.holder.isBound() && this.holder.value().supportsBulk();
+		}
+
+		@Override
+		public void fill(NoiseBatch batch, int seed, float[] output) {
+			this.holder.value().fill(batch, seed, output);
 		}
 
 		@Override

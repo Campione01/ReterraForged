@@ -19,6 +19,7 @@
 ## Mod Compatibility
 
 - Router graph audit proves exactly one QUICK_V1 custom node and no offload of biome, river, erosion, aquifer, structure, surface, ore, or block-placement logic.
+- Fresh and field-missing presets select terrain `LEGACY_V2` plus caves `LEGACY_V2`; fresh and mode-missing OpenCL configuration selects `OFF`.
 - The old generic graph compiler must reject QUICK_V1 rather than partially compiling around its custom node.
 - C2ME DFC source audit confirms unknown-node single and bulk delegation.
 - Static source audit requires zero C2ME imports/references and zero executor/future ownership in QUICK_V1/OpenCL code.
@@ -27,7 +28,7 @@
 ## Build And Runtime
 
 - Rebuild all native variants after every Rust source change.
-- Run Rust tests and the full common JUnit suite under JDK 21.
+- Run Rust tests and the full common and NeoForge JUnit suites under Java 25.
 - Package the NeoForge jar and verify native binaries, the complete third-party notice/license set, translations, mixins, and density codec resources in the archive.
 - The NeoForge packaging gate requires zero root `org.lwjgl.opencl` entries, exactly one `org.lwjgl:lwjgl-opencl:3.3.3` JarJar declaration, no nested LWJGL core, no explicit OpenCL module descriptor, and the automatic module name `org.lwjgl.opencl`.
 - Launch the real client mod set with RoadWeaver and require Java module resolution to pass with one selected OpenCL library. Also launch a headless server without LWJGL core and require native CPU fallback rather than module-resolution failure.

@@ -33,19 +33,21 @@ class QuickNoiseGraphCompilerTest {
 	@Test
 	void runtimeUsesAffineTilesButRejectsUnrelatedCoordinates() {
 		Noise noise = Noises.perlin(33, 256, 4);
-		float unrelatedLegacy = noise.computeLegacy(19.75F, -42.5F, 7);
+		float unrelatedLegacy = noise.compute(19.75F, -42.5F, 7);
 
 		try(QuickNoiseRuntime.Engine engine = new QuickNoiseRuntime.Engine(); QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(engine)) {
 			QuickNoiseRuntime.prepareSample(39, -17, 0.25F, 10.0F, 0.5F, -3.0F);
-			float first = noise.compute(19.75F, -11.5F, 7);
-			float repeated = noise.compute(19.75F, -11.5F, 7);
+			float first = noise.computeRoot(19.75F, -11.5F, 7);
+			float repeated = noise.computeRoot(19.75F, -11.5F, 7);
 			assertEquals(first, repeated);
 			assertEquals(1, engine.compiledGraphCount());
 
-			assertEquals(unrelatedLegacy, noise.compute(19.75F, -42.5F, 7));
+			assertEquals(unrelatedLegacy, noise.computeRoot(19.75F, -42.5F, 7));
 			try(QuickNoiseRuntime.CoordinateScope scaled = QuickNoiseRuntime.scaleCoordinates(0.2F)) {
-				float scaledFirst = noise.compute(3.95F, -2.3F, 7);
-				float scaledRepeated = noise.compute(3.95F, -2.3F, 7);
+				float scaledX = 39 * (0.25F * 0.2F) + (10.0F * 0.2F);
+				float scaledZ = -17 * (0.5F * 0.2F) + (-3.0F * 0.2F);
+				float scaledFirst = noise.computeRoot(scaledX, scaledZ, 7);
+				float scaledRepeated = noise.computeRoot(scaledX, scaledZ, 7);
 				assertEquals(scaledFirst, scaledRepeated);
 			}
 			assertEquals(2, engine.compiledGraphCount());
@@ -83,7 +85,7 @@ class QuickNoiseGraphCompilerTest {
 
 		try(QuickNoiseRuntime.Engine engine = new QuickNoiseRuntime.Engine(); QuickNoiseRuntime.Scope ignored = QuickNoiseRuntime.bind(engine)) {
 			QuickNoiseRuntime.prepareSample(4, 8);
-			assertEquals(42.0F, external.compute(4.0F, 8.0F, 0));
+			assertEquals(42.0F, external.computeRoot(4.0F, 8.0F, 0));
 			assertEquals(0, engine.compiledGraphCount());
 			assertEquals(0, engine.fallbackGraphCount());
 		}

@@ -26,7 +26,7 @@ public record Perlin2(@Deprecated int seed, float frequency, int octaves, float 
     }
     
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
         x *= this.frequency;
         z *= this.frequency;
         float sum = 0.0F;
@@ -38,6 +38,18 @@ public record Perlin2(@Deprecated int seed, float frequency, int octaves, float 
             amp *= this.gain;
         }
         return NoiseUtil.map(sum, this.min, this.max, (this.max - this.min));
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return true;
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		if(!batch.fillNative(this, seed, output)) {
+			Noise.super.fill(batch, seed, output);
+		}
 	}
 
 	@Override
@@ -63,16 +75,18 @@ public record Perlin2(@Deprecated int seed, float frequency, int octaves, float 
     public static float sample(float x, float y, int seed, Interpolation interpolation) {
         int x2 = NoiseUtil.floor(x);
         int y2 = NoiseUtil.floor(y);
-        int x3 = x2 + 1;
-        int y3 = y2 + 1;
-        float xs = interpolation.apply(x - x2);
-        float ys = interpolation.apply(y - y2);
         float xd0 = x - x2;
         float yd0 = y - y2;
+        float xs = interpolation.apply(xd0);
+        float ys = interpolation.apply(yd0);
         float xd2 = xd0 - 1.0F;
         float yd2 = yd0 - 1.0F;
-        float xf0 = NoiseUtil.lerp(NoiseUtil.gradCoord2D_24(seed, x2, y2, xd0, yd0), NoiseUtil.gradCoord2D_24(seed, x3, y2, xd2, yd0), xs);
-        float xf2 = NoiseUtil.lerp(NoiseUtil.gradCoord2D_24(seed, x2, y3, xd0, yd2), NoiseUtil.gradCoord2D_24(seed, x3, y3, xd2, yd2), xs);
+		int xPrime0 = NoiseUtil.X_PRIME * x2;
+		int xPrime1 = xPrime0 + NoiseUtil.X_PRIME;
+		int yPrime0 = NoiseUtil.Y_PRIME * y2;
+		int yPrime1 = yPrime0 + NoiseUtil.Y_PRIME;
+        float xf0 = NoiseUtil.lerp(NoiseUtil.gradCoord2D24Primed(seed, xPrime0, yPrime0, xd0, yd0), NoiseUtil.gradCoord2D24Primed(seed, xPrime1, yPrime0, xd2, yd0), xs);
+        float xf2 = NoiseUtil.lerp(NoiseUtil.gradCoord2D24Primed(seed, xPrime0, yPrime1, xd0, yd2), NoiseUtil.gradCoord2D24Primed(seed, xPrime1, yPrime1, xd2, yd2), xs);
         return NoiseUtil.lerp(xf0, xf2, ys);
     }
     
@@ -90,7 +104,7 @@ public record Perlin2(@Deprecated int seed, float frequency, int octaves, float 
         }
         return sum;
     }
-    
+
     private static float signal(int octaves) {
         int index = Math.min(octaves, SIGNALS.length - 1);
         return SIGNALS[index];

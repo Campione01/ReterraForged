@@ -140,7 +140,7 @@ final class OpenClRuntime implements AutoCloseable {
 			if(callback != null) {
 				callback.close();
 			}
-			RTFCommon.LOGGER.warn("RTF OpenCL initialization failed; QUICK_V1 will use native CPU ({})", t.toString());
+			RTFCommon.LOGGER.warn("RTF OpenCL initialization failed; density generation will use CPU backends ({})", t.toString());
 			RTFCommon.LOGGER.debug("RTF OpenCL initialization failure", t);
 			return null;
 		}

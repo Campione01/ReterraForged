@@ -25,7 +25,7 @@ public record Terrace(Noise input, Noise ramp, Noise cliff, Noise rampHeight, fl
 	}
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
         float input = NoiseUtil.clamp(this.input.compute(x, z, seed), 0.0F, 0.999999F);
         int index = NoiseUtil.floor(input * this.steps.length);
         Step step = this.steps[index];

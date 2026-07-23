@@ -11,8 +11,27 @@ record Add(Noise input1, Noise input2) implements Noise {
 	).apply(instance, Add::new));
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		return this.input1.compute(x, z, seed) + this.input2.compute(x, z, seed);
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input1.supportsBulk() && this.input2.supportsBulk();
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		this.input1.fill(batch, seed, output);
+		float[] right = batch.acquire();
+		try {
+			this.input2.fill(batch, seed, right);
+			for(int index = 0; index < output.length; index++) {
+				output[index] = output[index] + right[index];
+			}
+		} finally {
+			batch.release(right);
+		}
 	}
 
 	@Override

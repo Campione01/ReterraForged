@@ -14,8 +14,30 @@ record Clamp(Noise input, Noise min, Noise max) implements Noise {
 	).apply(instance, Clamp::new));
 	
 	@Override
-	public float computeLegacy(float x, float z, int seed) {
+	public float compute(float x, float z, int seed) {
 		return NoiseUtil.clamp(this.input.compute(x, z, seed), this.min.compute(x, z, seed), this.max.compute(x, z, seed));
+	}
+
+	@Override
+	public boolean supportsBulk() {
+		return this.input.supportsBulk() && this.min.supportsBulk() && this.max.supportsBulk();
+	}
+
+	@Override
+	public void fill(NoiseBatch batch, int seed, float[] output) {
+		this.input.fill(batch, seed, output);
+		float[] minValues = batch.acquire();
+		float[] maxValues = batch.acquire();
+		try {
+			this.min.fill(batch, seed, minValues);
+			this.max.fill(batch, seed, maxValues);
+			for(int index = 0; index < output.length; index++) {
+				output[index] = NoiseUtil.clamp(output[index], minValues[index], maxValues[index]);
+			}
+		} finally {
+			batch.release(maxValues);
+			batch.release(minValues);
+		}
 	}
 
 	@Override
