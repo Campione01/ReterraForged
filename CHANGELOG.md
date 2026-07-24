@@ -17,6 +17,10 @@
 - Removed the speculative `CellSampler` and `Tile` border changes used during
   diagnosis; those classes were already byte-identical in the original and
   affected jars.
+- Added a narrowly scoped runtime repair for preset packs written by the
+  affected Quickterraforged builds. It removes only holder-backed
+  `cache_once` markers whose mapped subtree contains an RTF `CellSampler`;
+  normal A75/current graphs and unrelated cache markers remain unchanged.
 
 ### Validation
 
@@ -31,6 +35,11 @@
   replace the original traversal.
 - Replayed all three erosion representations across 36,864 cells and verified
   raw-bit equality for height, erosion height, and sediment.
+- Reproduced the historical failure through the real `MixinRandomState` and
+  `NoiseChunk` lifecycle, then verified all 114,688 raw density values in the
+  affected chunk after repair with zero bit differences. The guard repaired
+  exactly the two vulnerable historical edges and left ordinary and inline
+  third-party cache graphs intact.
 - Generated independent worlds with Java 25 on a silent separate desktop and
   verified exact terrain-bearing chunk data at river/wetland `(505,583)`,
   inland `(729,159)`, and archipelago/ocean `(1833,-1377)`: block states,
@@ -38,6 +47,10 @@
   all match the original-only jar. Full stable NBT also matched at the river
   and ocean samples; the inland sample differed only by three shutdown-timed
   `fluid_ticks`, with identical generated blocks and heightmaps.
+- Loaded the actual stale preset ZIP in the full client pack and generated the
+  reported region successfully. Its remaining derived-height and base-occupancy
+  mismatch rates against A75 were both below an independent A75-versus-A75
+  repeat run, while the deterministic density comparison remained bit exact.
 - Repeated the river workload in `original/final/final/original` order with
   C2ME and OpenCL disabled. Mean start-region-to-player time fell from
   `15.586 s` to `12.819 s` (17.76% less time, 21.59% higher effective speed).

@@ -18,6 +18,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunction.NoiseHolder;
+import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -62,6 +63,8 @@ class MixinRandomState {
 	
 	private long seed;
 	private NoiseGeneratorSettings noiseGeneratorSettings;
+	private int reterraforged$repairedCellSamplerCacheOnceMarkers;
+	private boolean reterraforged$reportedCellSamplerCacheOnceRepair;
 	
 	@Redirect(
 		at = @At(
@@ -91,6 +94,15 @@ class MixinRandomState {
 						return context != null ? context.lookup : null;
 					}, marker.field());
 				}
+				// Older Quickterraforged preset packs persisted this exact holder-backed
+				// cache shape around sloped_cheese, where it aliases a mapped CellSampler.
+				if(function instanceof DensityFunctions.Marker marker
+					&& marker.type() == DensityFunctions.Marker.Type.CacheOnce
+					&& marker.wrapped() instanceof DensityFunctions.HolderHolder holder
+					&& reterraforged$containsCellSampler(holder.function().value())) {
+					MixinRandomState.this.reterraforged$repairedCellSamplerCacheOnceMarkers++;
+					return marker.wrapped();
+				}
 				return visitor.apply(function);
 			}
 
@@ -99,7 +111,9 @@ class MixinRandomState {
 	            return visitor.visitNoise(noiseHolder);
 	        }
 		};
-		return router.mapAll(this.densityFunctionWrapper);
+		NoiseRouter mapped = router.mapAll(this.densityFunctionWrapper);
+		this.reterraforged$reportCellSamplerCacheOnceRepair();
+		return mapped;
 	}
 
 	public void reterraforged$RTFRandomState$initialize(ServerLevel level) {
@@ -124,6 +138,7 @@ class MixinRandomState {
 				tbClimateSampler.setUniqueness(uniqueness.value().mapAll(this.densityFunctionWrapper));
 			});
 		}
+		this.reterraforged$reportCellSamplerCacheOnceRepair();
 		
 		presets.get(Preset.KEY).ifPresentOrElse((presetHolder) -> {
 			this.preset = presetHolder.value();
@@ -159,11 +174,41 @@ class MixinRandomState {
 
 	@Nullable
 	public DensityFunction reterraforged$RTFRandomState$wrap(DensityFunction function) {
-		return function.mapAll(this.densityFunctionWrapper);
+		DensityFunction mapped = function.mapAll(this.densityFunctionWrapper);
+		this.reterraforged$reportCellSamplerCacheOnceRepair();
+		return mapped;
 	}
 
 	public Noise reterraforged$RTFRandomState$seed(Noise noise) {
 		return Noises.shiftSeed(noise, (int) this.seed);
+	}
+
+	private static boolean reterraforged$containsCellSampler(DensityFunction root) {
+		if(root instanceof CellSampler) {
+			return true;
+		}
+		boolean[] found = { false };
+		root.mapAll(new DensityFunction.Visitor() {
+			@Override
+			public DensityFunction apply(DensityFunction function) {
+				if(function instanceof CellSampler) {
+					found[0] = true;
+				}
+				return function;
+			}
+		});
+		return found[0];
+	}
+
+	private void reterraforged$reportCellSamplerCacheOnceRepair() {
+		if(this.reterraforged$reportedCellSamplerCacheOnceRepair || this.reterraforged$repairedCellSamplerCacheOnceMarkers == 0) {
+			return;
+		}
+		this.reterraforged$reportedCellSamplerCacheOnceRepair = true;
+		RTFCommon.LOGGER.warn(
+			"Repaired {} persisted cache_once density marker(s) containing RTF CellSampler nodes for this RandomState",
+			this.reterraforged$repairedCellSamplerCacheOnceMarkers
+		);
 	}
 
 	private void clearGeneratorContext() {

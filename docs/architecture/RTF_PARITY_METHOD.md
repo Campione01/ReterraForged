@@ -73,24 +73,21 @@ stratification is repeated with that preset's own control points and continent
 scale. Enabled archipelagos are located outside the preset's continent as well.
 
 ```powershell
-$env:RTF_PARITY_PRESET = 'E:\Zero\1.21.1\config\reterraforged\presets\个人自用.json'
+$env:RTF_PARITY_PRESET = 'D:\Minecraft\config\reterraforged\presets\custom.json'
 ```
 
 ## Windows Test Command
 
-The Gradle daemon runs on JDK 21 because Gradle 8.8/Groovy does not support JDK
-25 as its host. The existing init script launches Java compilation and tests on
-JDK 25 while retaining Java 21 bytecode compatibility. On paths containing CJK
-characters, use the verified ASCII junction so the Java 25 argfile is decoded
-correctly.
+The Gradle daemon, compilation, and tests run on JDK 21 because Gradle
+8.8/Groovy does not support JDK 25 as its host. Client runtime validation may
+still use Java 25. On checkout paths containing CJK characters, use an ASCII
+junction so Java and Gradle argument files are decoded consistently.
 
 ```powershell
-$env:JAVA_HOME = 'C:\Program Files\Microsoft\jdk-21.0.11.10-hotspot'
+$env:JAVA_HOME = 'C:\Program Files\Java\jdk-21'
 $env:PATH = "$env:JAVA_HOME\bin;$env:PATH"
-Set-Location 'C:\Users\MSI\AppData\Local\Temp\rtf-semantic-parity'
-& 'E:\构建\.toolchains\gradle-8.8\bin\gradle.bat' `
-  --init-script '.planning\rtf-semantic-restoration-2026-07-22\local-repos.init.gradle' `
-  --init-script 'E:\构建\.codex-plans\rtf-opencl\java25-build.init.gradle' `
+Set-Location 'D:\Projects\ReterraForged'
+.\gradlew.bat `
   :neoforge:test `
   --tests raccoonman.reterraforged.world.worldgen.noise.module.RtfSemanticParityTest `
   --no-daemon --console=plain

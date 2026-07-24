@@ -178,8 +178,8 @@ class RtfLegacyV2NoiseChunkParityTest {
 		);
 	}
 
-	private static Templates templates(HolderLookup.Provider vanilla) {
-		Preset source = Presets.makeRTFDefault();
+	private static Templates templates(HolderLookup.Provider vanilla) throws Exception {
+		Preset source = sourcePreset().preset();
 		Preset legacyPreset = source.copy();
 		legacyPreset.world().noiseEngine = WorldSettings.NoiseEngine.LEGACY;
 		legacyPreset.caves().densityAlgorithm = DensityAlgorithm.LEGACY;
@@ -207,6 +207,14 @@ class RtfLegacyV2NoiseChunkParityTest {
 	}
 
 	private static PresetCorpus cacheExperimentPreset() throws Exception {
+		PresetCorpus source = sourcePreset();
+		Preset preset = source.preset().copy();
+		preset.world().noiseEngine = WorldSettings.NoiseEngine.LEGACY;
+		preset.caves().densityAlgorithm = DensityAlgorithm.LEGACY;
+		return new PresetCorpus(source.label(), preset);
+	}
+
+	private static PresetCorpus sourcePreset() throws Exception {
 		String externalPreset = System.getenv("RTF_PARITY_PRESET");
 		Preset source;
 		String label;
@@ -218,10 +226,7 @@ class RtfLegacyV2NoiseChunkParityTest {
 			source = Presets.makeRTFDefault();
 			label = "default";
 		}
-		Preset preset = source.copy();
-		preset.world().noiseEngine = WorldSettings.NoiseEngine.LEGACY;
-		preset.caves().densityAlgorithm = DensityAlgorithm.LEGACY;
-		return new PresetCorpus(label, preset);
+		return new PresetCorpus(label, source);
 	}
 
 	private static ExperimentTemplates cacheExperimentTemplates(Preset preset, HolderLookup.Provider vanilla) {
