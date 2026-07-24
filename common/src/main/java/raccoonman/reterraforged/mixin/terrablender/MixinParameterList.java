@@ -50,7 +50,6 @@ class MixinParameterList<T> {
 	private final AtomicLong diagnosticDirectPath = new AtomicLong();
 	private final AtomicLong diagnosticDirectOverrides = new AtomicLong();
 	private final AtomicLong diagnosticUnderground = new AtomicLong();
-
 	@Inject(
 		at = @At("HEAD"),
 		method = "initializeForTerraBlender",
@@ -310,4 +309,5 @@ class MixinParameterList<T> {
 		}
 		return "[" + firstIndex + "=" + firstCount + ", " + secondIndex + "=" + secondCount + ", " + thirdIndex + "=" + thirdCount + "]";
 	}
+
 }

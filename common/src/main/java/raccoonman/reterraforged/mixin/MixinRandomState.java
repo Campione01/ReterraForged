@@ -34,6 +34,9 @@ import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.tags.RTFDensityFunctionTags;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionClimateSampler;
+import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionModifier;
+import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
@@ -155,6 +158,7 @@ class MixinRandomState {
 					.orElseGet(PerformanceConfig::makeDefault);
 				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
 			}
+			this.configureBiomeSelectionSampler(this.preset);
 		}, () -> {
 			if(this.hasContext) {
 //				throw new IllegalStateException("Missing preset!");
@@ -215,8 +219,36 @@ class MixinRandomState {
 		if(this.generatorContext != null) {
 			this.generatorContext.close();
 		}
+		if((Object) this.sampler instanceof BiomeSelectionClimateSampler biomeSelectionSampler) {
+			biomeSelectionSampler.setBiomeSelectionSampler(null);
+		}
 		this.hasContext = false;
 		this.generatorContext = null;
 		this.preset = null;
+	}
+
+	private void configureBiomeSelectionSampler(Preset preset) {
+		if(!((Object) this.sampler instanceof BiomeSelectionClimateSampler climateSampler)) {
+			return;
+		}
+		if(this.generatorContext == null || !BiomeSelectionModifier.hasActiveUsage(preset.miscellaneous())) {
+			climateSampler.setBiomeSelectionSampler(null);
+			return;
+		}
+		climateSampler.setBiomeSelectionSampler(new BiomeSelectionSampler(
+			this.cellSampler(CellSampler.Field.MOUNTAIN),
+			this.cellSampler(CellSampler.Field.VOLCANO),
+			this.cellSampler(CellSampler.Field.MACRO_BIOME),
+			this.cellSampler(CellSampler.Field.TERRAIN_REGION),
+			this.cellSampler(CellSampler.Field.BIOME_REGION),
+			this.cellSampler(CellSampler.Field.HEIGHT)
+		));
+	}
+
+	private CellSampler cellSampler(CellSampler.Field field) {
+		return new CellSampler(() -> {
+			GeneratorContext context = this.generatorContext;
+			return context != null ? context.lookup : null;
+		}, field);
 	}
 }

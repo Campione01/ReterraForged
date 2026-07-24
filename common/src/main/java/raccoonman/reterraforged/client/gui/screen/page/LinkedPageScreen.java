@@ -58,7 +58,7 @@ public abstract class LinkedPageScreen extends Screen {
 		this.currentPage.init();
 
 		// these must be overlayed onto the current page
-		this.addRenderableOnly(new Label(16, 10, 20, 20, this.currentPage.title()));
+		this.addRenderableOnly(new Label(16, 10, pageTitleWidth(this.width), 20, this.currentPage.title()));
 
 		this.addRenderableWidget(this.cancelButton);
 		this.addRenderableWidget(this.doneButton);
@@ -79,6 +79,10 @@ public abstract class LinkedPageScreen extends Screen {
 	
 	public void onDone() {
 		this.currentPage.onDone();
+	}
+
+	static int pageTitleWidth(int screenWidth) {
+		return Math.max(20, screenWidth - 32);
 	}
 	
 	public interface Page {

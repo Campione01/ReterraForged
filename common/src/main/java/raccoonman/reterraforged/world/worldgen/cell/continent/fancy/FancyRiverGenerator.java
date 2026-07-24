@@ -46,8 +46,11 @@ public class FancyRiverGenerator extends BaseRiverGenerator<FancyContinentGenera
 
 	private void generateRoots(FancyContinent continent, Island island, Random random, GenWarp warp, List<Network.Builder> roots) {
 		Segment[] segments = island.getSegments();
-		int lineCount = Math.max(1, 8 - island.getId());
-		int endCount = Math.max(4, 12 - island.getId());
+		int lineCount = segmentLineCount(this.count, island.getId());
+		int endCount = endpointCount(this.count, island.getId());
+		if (lineCount == 0) {
+			return;
+		}
 		for (int i = 0; i < segments.length; ++i) {
 			boolean end = i == 0 || i == segments.length - 1;
 			Segment segment = segments[i];
@@ -58,6 +61,14 @@ public class FancyRiverGenerator extends BaseRiverGenerator<FancyContinentGenera
 		this.collectPointRoots(continent, island, first.a, first.scaleA, endCount, random, warp, roots);
 		Segment last = segments[segments.length - 1];
 		this.collectPointRoots(continent, island, last.b, last.scaleB, endCount, random, warp, roots);
+	}
+
+	static int segmentLineCount(int configuredCount, int islandId) {
+		return configuredCount <= 0 ? 0 : Math.max(1, configuredCount - islandId);
+	}
+
+	static int endpointCount(int configuredCount, int islandId) {
+		return configuredCount <= 0 ? 0 : Math.max(4, configuredCount + 4 - islandId);
 	}
 
 	private void collectSegmentRoots(FancyContinent continent, Island island, Segment segment, int count, Random random, GenWarp warp, List<Network.Builder> roots) {

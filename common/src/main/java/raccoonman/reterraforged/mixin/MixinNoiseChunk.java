@@ -1,5 +1,7 @@
 package raccoonman.reterraforged.mixin;
 
+import java.util.List;
+
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,6 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunctions;
@@ -24,6 +27,8 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionClimateSampler;
+import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
@@ -95,7 +100,7 @@ class MixinNoiseChunk {
 				if(noiseGeneratorSettings.seaLevel() != props.seaLevel) {
 					return fluidPicker;
 				}
-				if(noiseSettings.height() != props.worldHeight) {
+				if(!matchesPresetHeight(noiseSettings, props)) {
 					return fluidPicker;
 				}
 				int lavaLevel = props.lavaLevel;
@@ -113,6 +118,10 @@ class MixinNoiseChunk {
 		return fluidPicker;
 	}
 
+	static boolean matchesPresetHeight(NoiseSettings noiseSettings, WorldSettings.Properties properties) {
+		return noiseSettings.height() == properties.worldDepth + properties.worldHeight;
+	}
+
 	@Inject(
 		at = @At("HEAD"),
 		method = "wrapNew",
@@ -126,5 +135,26 @@ class MixinNoiseChunk {
 				callback.setReturnValue(DensityFunctions.zero());
 			}
 		}
+	}
+
+	@Inject(
+		at = @At("RETURN"),
+		method = "cachedClimateSampler"
+	)
+	private void reterraforged$copyBiomeSelectionSampler(
+		NoiseRouter noiseRouter,
+		List<Climate.ParameterPoint> parameters,
+		CallbackInfoReturnable<Climate.Sampler> callback
+	) {
+		if((Object) callback.getReturnValue() instanceof BiomeSelectionClimateSampler cachedSampler
+			&& (Object) this.randomState.sampler() instanceof BiomeSelectionClimateSampler globalSampler) {
+			BiomeSelectionSampler sampler = globalSampler.getBiomeSelectionSampler();
+			cachedSampler.setBiomeSelectionSampler(sampler != null ? sampler.map(this::wrap) : null);
+		}
+	}
+
+	@Shadow
+	private DensityFunction wrap(DensityFunction densityFunction) {
+		throw new IllegalStateException();
 	}
 }

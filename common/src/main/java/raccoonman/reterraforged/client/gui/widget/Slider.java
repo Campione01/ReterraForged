@@ -61,9 +61,9 @@ public class Slider extends AbstractSliderButton {
     
     @Override
     public void applyValue() {
-    	if(this.callback != null) {
-        	this.value = this.callback.apply(this, this.value);
-    	}
+		if(this.callback != null) {
+			this.value = this.callback.apply(this, this.value);
+		}
     }
 
     @Override

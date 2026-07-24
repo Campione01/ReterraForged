@@ -149,7 +149,7 @@ public class ErodeFeature extends Feature<Config> {
             BlockState material = getMaterial(config, rand, cell, pos, top, generator instanceof NoiseBasedChunkGenerator noiseChunkGenerator ? noiseChunkGenerator.generatorSettings().value().defaultBlock() : Blocks.STONE.defaultBlockState());
             if (material != top) {
                 if (material.is(RTFBlockTags.ROCK)) {
-                	erodeRock(chunk, cell, pos, surfaceY);
+                    erodeRock(chunk, cell, pos, surfaceY, config.plainStone());
                     return;
                 } else {
                     ColumnDecorator.fillDownSolid(chunk, pos, surfaceY, surfaceY - 4, material);
@@ -159,7 +159,7 @@ public class ErodeFeature extends Feature<Config> {
         }
 	}
 
-    private static void erodeRock(ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int y) {
+    private static void erodeRock(ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int y, boolean plainStone) {
         int depth = 32;
         BlockState material = Blocks.GRAVEL.defaultBlockState();
         // find the uppermost layer of rock & record it's depth
@@ -167,7 +167,7 @@ public class ErodeFeature extends Feature<Config> {
             pos.setY(y - dy);
             BlockState state = chunk.getBlockState(pos);
             if (state.is(RTFBlockTags.ROCK)) {
-                material = state;
+                material = erodedRockMaterial(plainStone, state);
                 depth = dy + 1;
                 break;
             }
@@ -177,6 +177,10 @@ public class ErodeFeature extends Feature<Config> {
         for (int dy = 0; dy < depth; dy++) {
             ColumnDecorator.replaceSolid(chunk, pos.setY(y - dy), material);
         }
+    }
+
+    static BlockState erodedRockMaterial(boolean plainStone, BlockState discoveredRock) {
+        return plainStone ? Blocks.STONE.defaultBlockState() : discoveredRock;
     }
 	
 	private static void placeScree(Config config, Noise rand, ChunkAccess chunk, Cell cell, BlockPos.MutableBlockPos pos, int surfaceY) {
@@ -237,7 +241,7 @@ public class ErodeFeature extends Feature<Config> {
         return Blocks.COARSE_DIRT.defaultBlockState();
     }
 
-    public record Config(int rockVar, int rockMin, int dirtVar, int dirtMin, float rockSteepness, float dirtSteepness, float screeSteepness, float heightModifier, float slopeModifier, float sedimentModifier, float sedimentNoise, float screeValue) implements FeatureConfiguration {
+    public record Config(int rockVar, int rockMin, int dirtVar, int dirtMin, float rockSteepness, float dirtSteepness, float screeSteepness, float heightModifier, float slopeModifier, float sedimentModifier, float sedimentNoise, float screeValue, boolean plainStone) implements FeatureConfiguration {
 		public static final Codec<Config> CODEC = RecordCodecBuilder.create(instance -> instance.group(
 			Codec.INT.fieldOf("rock_var").forGetter(Config::rockVar),
 			Codec.INT.fieldOf("rock_min").forGetter(Config::rockMin),
@@ -250,7 +254,12 @@ public class ErodeFeature extends Feature<Config> {
 			Codec.FLOAT.fieldOf("slope_modifier").forGetter(Config::slopeModifier),
 			Codec.FLOAT.fieldOf("sediment_modifier").forGetter(Config::sedimentModifier),
 			Codec.FLOAT.fieldOf("sediment_noise").forGetter(Config::sedimentNoise),
-			Codec.FLOAT.fieldOf("screeValue").forGetter(Config::screeValue)
+			Codec.FLOAT.fieldOf("screeValue").forGetter(Config::screeValue),
+			Codec.BOOL.optionalFieldOf("plain_stone", false).forGetter(Config::plainStone)
 		).apply(instance, Config::new));
+
+		public Config(int rockVar, int rockMin, int dirtVar, int dirtMin, float rockSteepness, float dirtSteepness, float screeSteepness, float heightModifier, float slopeModifier, float sedimentModifier, float sedimentNoise, float screeValue) {
+			this(rockVar, rockMin, dirtVar, dirtMin, rockSteepness, dirtSteepness, screeSteepness, heightModifier, slopeModifier, sedimentModifier, sedimentNoise, screeValue, false);
+		}
 	}
 }

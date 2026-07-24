@@ -238,6 +238,34 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 				return cell.weirdness;
 			}
 		},
+		MOUNTAIN("mountain") {
+
+			@Override
+			public float read(Cell cell, Heightmap heightmap) {
+				return cell.terrain.isMountain() ? 1.0F : 0.0F;
+			}
+		},
+		VOLCANO("volcano") {
+
+			@Override
+			public float read(Cell cell, Heightmap heightmap) {
+				return cell.terrain.isVolcano() ? 1.0F : 0.0F;
+			}
+		},
+		MACRO_BIOME("macro_biome") {
+
+			@Override
+			public float read(Cell cell, Heightmap heightmap) {
+				return cell.macroBiomeId;
+			}
+		},
+		TERRAIN_REGION("terrain_region") {
+
+			@Override
+			public float read(Cell cell, Heightmap heightmap) {
+				return cell.terrainRegionId;
+			}
+		},
 		BIOME_REGION("biome_region") {
 			
 			@Override

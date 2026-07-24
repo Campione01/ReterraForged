@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.world.worldgen.cell.terrain.populator;
 
+import raccoonman.reterraforged.data.worldgen.preset.settings.TerrainSettings;
 import raccoonman.reterraforged.world.worldgen.biome.Erosion;
 import raccoonman.reterraforged.world.worldgen.biome.Weirdness;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
@@ -17,6 +18,8 @@ import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
+    private static final float MAX_HORIZONTAL_FREQUENCY = Noises.MAX_REASONABLE_NOISE_VALUE;
+
     private Noise cone;
     private Noise height;
     private Noise lowlands;
@@ -29,6 +32,10 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
     private Terrain outer;
     
     private float weight;
+    private float baseScale = 1.0F;
+    private float verticalScale = 1.0F;
+    private float horizontalFrequency = 1.0F;
+    private boolean identityScales = true;
     
     public VolcanoPopulator(Seed seed, RegionConfig region, Levels levels, float weight) {
         float midpoint = 0.3F;
@@ -67,6 +74,55 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
         
         this.weight = weight;
     }
+
+    public VolcanoPopulator(Seed seed, RegionConfig region, Levels levels, TerrainSettings.Terrain settings) {
+        this(seed, region, levels, settings.weight);
+        this.configureScales(settings);
+    }
+
+    VolcanoPopulator(Noise cone, Noise height, Noise lowlands, float bias, float weight) {
+        this(cone, height, lowlands, bias, new TerrainSettings.Terrain(weight, 1.0F, 1.0F, 1.0F));
+    }
+
+    VolcanoPopulator(Noise cone, Noise height, Noise lowlands, float bias, TerrainSettings.Terrain settings) {
+        float midpoint = 0.3F;
+        float range = 0.3F;
+        this.cone = cone;
+        this.height = height;
+        this.lowlands = lowlands;
+        this.inversionPoint = 0.94F;
+        this.blendLower = midpoint - range / 2.0F;
+        this.blendUpper = this.blendLower + range;
+        this.blendRange = this.blendUpper - this.blendLower;
+        this.outer = TerrainType.VOLCANO;
+        this.inner = TerrainType.VOLCANO_PIPE;
+        this.bias = bias;
+        this.weight = settings.weight;
+        this.configureScales(settings);
+    }
+
+    private void configureScales(TerrainSettings.Terrain settings) {
+        this.baseScale = settings.baseScale;
+        this.verticalScale = settings.verticalScale;
+        this.horizontalFrequency = horizontalFrequency(settings.horizontalScale);
+        this.identityScales = this.baseScale == 1.0F && this.verticalScale == 1.0F && settings.horizontalScale == 1.0F;
+    }
+
+    private static float horizontalFrequency(float horizontalScale) {
+        if (!(horizontalScale > 0.0F)) {
+            return MAX_HORIZONTAL_FREQUENCY;
+        }
+        // TerraForged's HScalePopulator samples at the reciprocal scale.
+        return Math.min(1.0F / horizontalScale, MAX_HORIZONTAL_FREQUENCY);
+    }
+
+    private static float scaleCoordinate(float coordinate, float frequency) {
+        double scaled = (double) coordinate * frequency;
+        if (Double.isNaN(scaled)) {
+            return 0.0F;
+        }
+        return (float) Math.max(-Float.MAX_VALUE, Math.min(Float.MAX_VALUE, scaled));
+    }
     
     public float weight() {
     	return this.weight;
@@ -74,6 +130,15 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
     
     @Override
     public void apply(Cell cell, float x, float z) {
+        // Preserve the original volcano arithmetic for existing presets.
+        if (this.identityScales) {
+            this.applyLegacy(cell, x, z);
+        } else {
+            this.applyScaled(cell, x, z);
+        }
+    }
+
+    private void applyLegacy(Cell cell, float x, float z) {
         float value = this.cone.computeRoot(x, z, 0);
         float limit = this.height.computeRoot(x, z, 0);
         float maxHeight = limit * this.inversionPoint;
@@ -97,6 +162,43 @@ public class VolcanoPopulator implements CellPopulator, WeightedPopulator {
             cell.terrain = this.outer;
         }
         cell.height = this.bias + value;
+    }
+
+    private void applyScaled(Cell cell, float x, float z) {
+        if (this.horizontalFrequency != 1.0F) {
+            x = scaleCoordinate(x, this.horizontalFrequency);
+            z = scaleCoordinate(z, this.horizontalFrequency);
+        }
+
+        float value = this.cone.computeRoot(x, z, 0);
+        float limit = this.height.computeRoot(x, z, 0);
+        float maxHeight = limit * this.inversionPoint;
+        cell.weirdness = Weirdness.LOW_SLICE_NORMAL_DESCENDING.mid();
+        cell.erosion = Erosion.LEVEL_4.mid();
+        if (value > maxHeight) {
+            float steepnessModifier = 1.0F;
+            float delta = (value - maxHeight) * steepnessModifier;
+            float range = limit - maxHeight;
+            float alpha = delta / range;
+            if (alpha > 0.925F) {
+                cell.terrain = this.inner;
+            }
+            value = maxHeight - maxHeight / 5.0F * alpha;
+        } else if (value < this.blendLower) {
+            value += this.lowlands.computeRoot(x, z, 0);
+            cell.terrain = this.outer;
+        } else if (value < this.blendUpper) {
+            float alpha2 = 1.0F - (value - this.blendLower) / this.blendRange;
+            value += this.lowlands.computeRoot(x, z, 0) * alpha2;
+            cell.terrain = this.outer;
+        }
+
+        if (this.baseScale == 1.0F && this.verticalScale == 1.0F) {
+            cell.height = this.bias + value;
+        } else {
+            // The Engine treats ground bias as the base and the shaped cone as variance.
+            cell.height = this.bias * this.baseScale + value * this.verticalScale;
+        }
     }
     
     public static void modifyVolcanoType(Cell cell, Levels levels) {

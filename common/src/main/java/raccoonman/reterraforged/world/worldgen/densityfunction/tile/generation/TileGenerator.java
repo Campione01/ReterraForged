@@ -68,34 +68,11 @@ public class TileGenerator {
 				int chunkX = batchX * this.batchSize;
 				int chunkZ = batchZ * this.batchSize;
 				futures[batchX * this.batchCount + batchZ] = CompletableFuture.runAsync(() -> {
-					try (NoiseRootRuntime.Scope ignored = NoiseRootRuntime.bind(this.noiseEngine)) {
-						try {
-							int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
-							int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
-							for (int cZ = chunkZ; cZ < maxZ; cZ++) {
-								for (int cX = chunkX; cX < maxX; cX++) {
-									Chunk chunk = tile.getChunkWriter(cX, cZ);
-
-									Rivermap rivers = null;
-									for (int dz = 0; dz < 16; dz++) {
-										for (int dx = 0; dx < 16; dx++) {
-											int worldX = chunk.getBlockX() + dx;
-											int worldZ = chunk.getBlockZ() + dz;
-											Cell cell = chunk.getCell(dx, dz);
-
-											NoiseRootRuntime.prepareSample(worldX, worldZ);
-											this.heightmap.applyTerrain(cell, worldX, worldZ);
-											rivers = Rivermap.get(cell, rivers, this.heightmap);
-											this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
-											this.heightmap.applyClimate(cell, worldX, worldZ, true);
-										}
-									}
-								}
-							}
-						} finally {
-							CellSampler.clearThreadLocalCache();
-							ThreadPools.clearWorldgenScratch();
-						}
+					try {
+						this.generateBatch(tile, chunkX, chunkZ);
+					} finally {
+						CellSampler.clearThreadLocalCache();
+						ThreadPools.clearWorldgenScratch();
 					}
 				}, ThreadPools.WORLD_GEN);
 			}
@@ -124,38 +101,11 @@ public class TileGenerator {
 				int chunkZ = batchZ * this.batchSize;
 				futures[batchX * this.batchCount + batchZ] = CompletableFuture.runAsync(() -> {
 					throwIfCancelled(cancelled);
-					try (NoiseRootRuntime.Scope ignored = NoiseRootRuntime.bind(this.noiseEngine)) {
-						try {
-							int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
-							int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
-							for (int cZ = chunkZ; cZ < maxZ; cZ++) {
-								throwIfCancelled(cancelled);
-								for (int cX = chunkX; cX < maxX; cX++) {
-									Chunk chunk = tile.getChunkWriter(cX, cZ);
-
-									Rivermap rivers = null;
-									for (int dz = 0; dz < 16; dz++) {
-										throwIfCancelled(cancelled);
-										for (int dx = 0; dx < 16; dx++) {
-											int sampleX = chunk.getBlockX() + dx;
-											int sampleZ = chunk.getBlockZ() + dz;
-											float worldX = sampleX * zoom + translateX;
-											float worldZ = sampleZ * zoom + translateZ;
-											Cell cell = chunk.getCell(dx, dz);
-
-											NoiseRootRuntime.prepareSample(sampleX, sampleZ, zoom, translateX, zoom, translateZ);
-											this.heightmap.applyTerrain(cell, worldX, worldZ);
-											rivers = Rivermap.get(cell, rivers, this.heightmap);
-											this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
-											this.heightmap.applyClimate(cell, worldX, worldZ, true);
-										}
-									}
-								}
-							}
-						} finally {
-							CellSampler.clearThreadLocalCache();
-							ThreadPools.clearWorldgenScratch();
-						}
+					try {
+						this.generateZoomedBatch(tile, chunkX, chunkZ, zoom, translateX, translateZ, cancelled);
+					} finally {
+						CellSampler.clearThreadLocalCache();
+						ThreadPools.clearWorldgenScratch();
 					}
 				}, ThreadPools.WORLD_GEN);
 			}
@@ -172,6 +122,80 @@ public class TileGenerator {
 				tile.close();
 			}
 		});
+	}
+
+	private void generateBatch(Tile tile, int chunkX, int chunkZ) {
+		if(this.noiseEngine == null) {
+			this.populateBatch(tile, chunkX, chunkZ, false);
+			return;
+		}
+		try(NoiseRootRuntime.Scope ignored = NoiseRootRuntime.bind(this.noiseEngine)) {
+			this.populateBatch(tile, chunkX, chunkZ, true);
+		}
+	}
+
+	private void populateBatch(Tile tile, int chunkX, int chunkZ, boolean prepareNoiseRoots) {
+		int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
+		int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
+		for(int cZ = chunkZ; cZ < maxZ; cZ++) {
+			for(int cX = chunkX; cX < maxX; cX++) {
+				Chunk chunk = tile.getChunkWriter(cX, cZ);
+				Rivermap rivers = null;
+				for(int dz = 0; dz < 16; dz++) {
+					for(int dx = 0; dx < 16; dx++) {
+						int worldX = chunk.getBlockX() + dx;
+						int worldZ = chunk.getBlockZ() + dz;
+						Cell cell = chunk.getCell(dx, dz);
+						if(prepareNoiseRoots) {
+							NoiseRootRuntime.prepareSample(worldX, worldZ);
+						}
+						this.heightmap.applyTerrain(cell, worldX, worldZ);
+						rivers = Rivermap.get(cell, rivers, this.heightmap);
+						this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
+						this.heightmap.applyClimate(cell, worldX, worldZ, true);
+					}
+				}
+			}
+		}
+	}
+
+	private void generateZoomedBatch(Tile tile, int chunkX, int chunkZ, float zoom, float translateX, float translateZ, BooleanSupplier cancelled) {
+		if(this.noiseEngine == null) {
+			this.populateZoomedBatch(tile, chunkX, chunkZ, zoom, translateX, translateZ, cancelled, false);
+			return;
+		}
+		try(NoiseRootRuntime.Scope ignored = NoiseRootRuntime.bind(this.noiseEngine)) {
+			this.populateZoomedBatch(tile, chunkX, chunkZ, zoom, translateX, translateZ, cancelled, true);
+		}
+	}
+
+	private void populateZoomedBatch(Tile tile, int chunkX, int chunkZ, float zoom, float translateX, float translateZ, BooleanSupplier cancelled, boolean prepareNoiseRoots) {
+		int maxX = Math.min(this.tileSizeChunks.total(), chunkX + this.batchSize);
+		int maxZ = Math.min(this.tileSizeChunks.total(), chunkZ + this.batchSize);
+		for(int cZ = chunkZ; cZ < maxZ; cZ++) {
+			throwIfCancelled(cancelled);
+			for(int cX = chunkX; cX < maxX; cX++) {
+				Chunk chunk = tile.getChunkWriter(cX, cZ);
+				Rivermap rivers = null;
+				for(int dz = 0; dz < 16; dz++) {
+					throwIfCancelled(cancelled);
+					for(int dx = 0; dx < 16; dx++) {
+						int sampleX = chunk.getBlockX() + dx;
+						int sampleZ = chunk.getBlockZ() + dz;
+						float worldX = sampleX * zoom + translateX;
+						float worldZ = sampleZ * zoom + translateZ;
+						Cell cell = chunk.getCell(dx, dz);
+						if(prepareNoiseRoots) {
+							NoiseRootRuntime.prepareSample(sampleX, sampleZ, zoom, translateX, zoom, translateZ);
+						}
+						this.heightmap.applyTerrain(cell, worldX, worldZ);
+						rivers = Rivermap.get(cell, rivers, this.heightmap);
+						this.heightmap.applyRivers(cell, worldX, worldZ, rivers);
+						this.heightmap.applyClimate(cell, worldX, worldZ, true);
+					}
+				}
+			}
+		}
 	}
     
 	private Tile makeTile(int x, int z) {

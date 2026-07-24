@@ -20,8 +20,12 @@ import raccoonman.reterraforged.world.worldgen.surface.rule.StrataRule.Strata;
 public class PresetSurfaceRuleData {
     
     public static SurfaceRules.RuleSource overworld(Preset preset, HolderGetter<DensityFunction> densityFunctions, HolderGetter<Noise> noise) {
+		SurfaceRules.RuleSource overworld = SurfaceRuleData.overworld();
+		if(!preset.miscellaneous().strataDecorator) {
+			return overworld;
+		}
 		return SurfaceRules.sequence(
-				SurfaceRuleData.overworld(),
+				overworld,
 				makeStrataRule(noise)
 		);
     }

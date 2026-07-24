@@ -23,6 +23,7 @@ import net.minecraft.server.packs.repository.PackRepository;
 import net.minecraft.world.level.levelgen.WorldOptions;
 import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen;
+import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.data.worldgen.Datapacks;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
@@ -30,17 +31,38 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 //FIXME pressing the create world screen before the pack is copied will fuck the game up (surprisingly noone seems to have run into this?)
 public class PresetConfigScreen extends LinkedPageScreen {
 	private CreateWorldScreen parent;
+	private PresetEntry previewPreset;
+	private PresetEditorPage.Preview preview;
 	
 	public PresetConfigScreen(CreateWorldScreen parent) {
 		this.parent = parent;
 		this.currentPage = new PresetListPage(this);
+	}
+
+	@Override
+	public void setPage(Page page) {
+		super.setPage(page);
+		if(!retainsPreview(page)) {
+			this.disposePreview();
+		}
+	}
+
+	static boolean retainsPreview(Page page) {
+		return page instanceof PresetEditorPage;
 	}
 	
 	@Override
 	public void onClose() {
 		super.onClose();
 
+		this.disposePreview();
 		this.minecraft.setScreen(this.parent);
+	}
+
+	@Override
+	public void removed() {
+		this.disposePreview();
+		super.removed();
 	}
 	
 	public void setSeed(long seed) {
@@ -52,6 +74,30 @@ public class PresetConfigScreen extends LinkedPageScreen {
 	
 	public WorldCreationContext getSettings() {
 		return this.parent.getUiState().getSettings();
+	}
+
+	PresetEditorPage.Preview acquirePreview(PresetEditorPage owner, PresetEntry preset) {
+		if(this.preview == null || this.previewPreset != preset) {
+			this.disposePreview();
+			this.previewPreset = preset;
+			this.preview = new PresetEditorPage.Preview(this, preset);
+		}
+		this.preview.attach(owner);
+		return this.preview;
+	}
+
+	void detachPreview(PresetEditorPage owner) {
+		if(this.preview != null) {
+			this.preview.detach(owner);
+		}
+	}
+
+	private void disposePreview() {
+		if(this.preview != null) {
+			this.preview.close();
+			this.preview = null;
+			this.previewPreset = null;
+		}
 	}
 
 	public void applyPreset(PresetEntry preset) throws IOException {		

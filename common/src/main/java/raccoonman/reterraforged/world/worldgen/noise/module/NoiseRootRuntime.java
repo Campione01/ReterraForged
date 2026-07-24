@@ -1,5 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.noise.module;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.jetbrains.annotations.Nullable;
 
 import raccoonman.reterraforged.concurrent.ThreadPools;
@@ -10,6 +12,7 @@ import raccoonman.reterraforged.concurrent.ThreadPools;
  */
 public final class NoiseRootRuntime {
 	private static final ThreadLocal<Session> CURRENT = new ThreadLocal<>();
+	private static final AtomicInteger ACTIVE_SESSIONS = new AtomicInteger();
 	private static final CoordinateScope NO_COORDINATE_SCOPE = new CoordinateScope(null, null);
 	private static final LegacyScope NO_LEGACY_SCOPE = new LegacyScope(null, null);
 
@@ -17,6 +20,9 @@ public final class NoiseRootRuntime {
 	}
 
 	static float computeRoot(Noise noise, float x, float z, int seed) {
+		if(ACTIVE_SESSIONS.get() == 0) {
+			return noise.compute(x, z, seed);
+		}
 		Session session = current();
 		return session != null ? session.computeRoot(noise, x, z, seed) : noise.compute(x, z, seed);
 	}
@@ -26,10 +32,17 @@ public final class NoiseRootRuntime {
 		Session previous = current(owner);
 		Session current = engine == null ? null : engine.openSession();
 		setCurrent(owner, current);
-		return new Scope(owner, previous, current);
+		boolean counted = current != null;
+		if(counted) {
+			ACTIVE_SESSIONS.incrementAndGet();
+		}
+		return new Scope(owner, previous, current, counted);
 	}
 
 	public static void prepareSample(int sampleX, int sampleZ) {
+		if(ACTIVE_SESSIONS.get() == 0) {
+			return;
+		}
 		Session session = current();
 		if(session != null) {
 			session.prepareSample(sampleX, sampleZ, 1.0F, 0.0F, 1.0F, 0.0F);
@@ -37,6 +50,9 @@ public final class NoiseRootRuntime {
 	}
 
 	public static void prepareSample(int sampleX, int sampleZ, float xScale, float xOffset, float zScale, float zOffset) {
+		if(ACTIVE_SESSIONS.get() == 0) {
+			return;
+		}
 		Session session = current();
 		if(session != null) {
 			session.prepareSample(sampleX, sampleZ, xScale, xOffset, zScale, zOffset);
@@ -47,11 +63,17 @@ public final class NoiseRootRuntime {
 		if(!Float.isFinite(scale) || scale == 0.0F) {
 			throw new IllegalArgumentException("Coordinate scale must be finite and non-zero");
 		}
+		if(ACTIVE_SESSIONS.get() == 0) {
+			return NO_COORDINATE_SCOPE;
+		}
 		Session session = current();
 		return session == null ? NO_COORDINATE_SCOPE : new CoordinateScope(session, session.scaleCoordinates(scale));
 	}
 
 	public static LegacyScope legacyCoordinates() {
+		if(ACTIVE_SESSIONS.get() == 0) {
+			return NO_LEGACY_SCOPE;
+		}
 		Session session = current();
 		return session == null ? NO_LEGACY_SCOPE : new LegacyScope(session, session.legacyCoordinates());
 	}
@@ -84,12 +106,14 @@ public final class NoiseRootRuntime {
 		private Session previous;
 		@Nullable
 		private Session current;
+		private final boolean counted;
 		private boolean closed;
 
-		private Scope(Thread owner, @Nullable Session previous, @Nullable Session current) {
+		private Scope(Thread owner, @Nullable Session previous, @Nullable Session current, boolean counted) {
 			this.owner = owner;
 			this.previous = previous;
 			this.current = current;
+			this.counted = counted;
 		}
 
 		@Override
@@ -102,13 +126,19 @@ public final class NoiseRootRuntime {
 			if(owner == null || Thread.currentThread() != owner || current(owner) != this.current) {
 				throw new IllegalStateException("Root-noise scopes must close on the creating thread and in reverse order");
 			}
-			if(this.current != null) {
-				this.current.close();
+			try {
+				if(this.current != null) {
+					this.current.close();
+				}
+			} finally {
+				setCurrent(owner, this.previous);
+				if(this.counted) {
+					ACTIVE_SESSIONS.decrementAndGet();
+				}
+				this.owner = null;
+				this.current = null;
+				this.previous = null;
 			}
-			setCurrent(owner, this.previous);
-			this.owner = null;
-			this.current = null;
-			this.previous = null;
 		}
 	}
 

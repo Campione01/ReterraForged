@@ -27,8 +27,11 @@ class MixinClimateSampler {
 		locals = LocalCapture.CAPTURE_FAILHARD
 	)
 	public void sample(int i, int j, int k, CallbackInfoReturnable<TargetPoint> callback, int l, int m, int n, DensityFunction.SinglePointContext ctx) {
-		if(this.uniqueness != null && (Object) callback.getReturnValue() instanceof TBTargetPoint tbTargetPoint) {
-			tbTargetPoint.setUniqueness(this.uniqueness.compute(ctx));
+		TargetPoint targetPoint = callback.getReturnValue();
+		if((Object) targetPoint instanceof TBTargetPoint tbTargetPoint) {
+			if(this.uniqueness != null) {
+				tbTargetPoint.setUniqueness(this.uniqueness.compute(ctx));
+			}
 		}
 	}
 	

@@ -1,9 +1,15 @@
 package raccoonman.reterraforged.world.worldgen.cell.rivermap.lake;
 
+import java.util.Random;
+
 import raccoonman.reterraforged.data.worldgen.preset.settings.RiverSettings;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
+import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 
 public class LakeConfig {
+    public static final float DEFAULT_PRESET_DISTANCE_MIN = 0.0F;
+    public static final float DEFAULT_PRESET_DISTANCE_MAX = 0.03F;
+
     public float depth;
     public float chance;
     public float sizeMin;
@@ -22,8 +28,18 @@ public class LakeConfig {
         this.sizeRange = Math.max(0, this.sizeMax - this.sizeMin);
         this.bankMin = builder.bankMin;
         this.bankMax = builder.bankMax;
-        this.distanceMin = builder.distanceMin;
-        this.distanceMax = builder.distanceMax;
+        float distanceMin = Math.min(builder.distanceMin, builder.distanceMax);
+        float distanceMax = Math.max(builder.distanceMin, builder.distanceMax);
+        this.distanceMin = NoiseUtil.clamp(distanceMin, 0.0F, 1.0F);
+        this.distanceMax = NoiseUtil.clamp(distanceMax, this.distanceMin, 1.0F);
+    }
+
+    public float nextStartDistance(Random random) {
+        return this.distanceMin + random.nextFloat() * (this.distanceMax - this.distanceMin);
+    }
+
+    public boolean usesDefaultPresetDistance() {
+        return this.distanceMin == DEFAULT_PRESET_DISTANCE_MIN && this.distanceMax == DEFAULT_PRESET_DISTANCE_MAX;
     }
     
     public static LakeConfig of(RiverSettings.Lake settings, Levels levels) {

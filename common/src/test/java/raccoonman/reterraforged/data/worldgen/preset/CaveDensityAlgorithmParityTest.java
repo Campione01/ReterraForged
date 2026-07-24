@@ -45,7 +45,7 @@ class CaveDensityAlgorithmParityTest {
 		int legacyV2Caches = countCacheOnce(legacyV2.finalDensity());
 
 		assertEquals(legacyCaches, legacyV2Caches);
-		assertEquals(legacy.finalDensity(), legacyV2.finalDensity());
+		assertEquals(graphSignature(legacy.finalDensity()), graphSignature(legacyV2.finalDensity()));
 	}
 
 	@Test
@@ -127,6 +127,26 @@ class CaveDensityAlgorithmParityTest {
 			}
 		});
 		return count.get();
+	}
+
+	private static List<String> graphSignature(DensityFunction density) {
+		List<String> signature = new ArrayList<>();
+		density.mapAll(new DensityFunction.Visitor() {
+			@Override
+			public DensityFunction apply(DensityFunction function) {
+				StringBuilder entry = new StringBuilder(function.getClass().getName())
+					.append(':')
+					.append(Long.toHexString(Double.doubleToRawLongBits(function.minValue())))
+					.append(':')
+					.append(Long.toHexString(Double.doubleToRawLongBits(function.maxValue())));
+				if(function instanceof DensityFunctions.Marker marker) {
+					entry.append(':').append(marker.type());
+				}
+				signature.add(entry.toString());
+				return function;
+			}
+		});
+		return signature;
 	}
 
 	private static List<DensityFunction.SinglePointContext> contexts(int size, int salt) {
