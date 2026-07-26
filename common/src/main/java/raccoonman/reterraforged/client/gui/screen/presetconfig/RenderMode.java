@@ -34,22 +34,6 @@ public enum RenderMode {
             }
         }
     },
-    FAKE_WATER_BIOME {
-
-        @Override
-        public boolean handlesWater() {
-            return true;
-        }
-
-        @Override
-        public int getColor(Cell cell, Levels levels, float scale, float bias) {
-            return switch (cell.fakeWaterBiome) {
-                case NONE -> rgba(70, 70, 70);
-                case RIVER -> rgba(35, 170, 225);
-                case OCEAN -> rgba(25, 65, 150);
-            };
-        }
-    },
     TRANSITION_POINTS {
     	
         @Override

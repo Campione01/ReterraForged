@@ -34,12 +34,9 @@ import raccoonman.reterraforged.world.worldgen.noise.function.EdgeFunction;
 import raccoonman.reterraforged.world.worldgen.noise.function.Interpolation;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
-import raccoonman.reterraforged.world.worldgen.noise.module.NoiseRootRuntime;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 public record Heightmap(CellPopulator terrain, CellPopulator region, Continent continent, Climate climate, Levels levels, ControlPoints controlPoints, float terrainFrequency, Noise beachNoise, FakeWaterBiomeResolver fakeWaterBiomeResolver) {
-    private static final float INITIAL_ISLAND_INLAND = 0.0F;
-    private static final float INITIAL_ISLAND_COAST = 0.1F;
 	
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
 		this.applyTerrain(cell, x, z);
@@ -52,12 +49,10 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 	
 	public void applyTerrain(Cell cell, float x, float z) {
         cell.terrain = TerrainType.FLATS;
-        cell.beachNoise = this.beachNoise.computeRoot(x, z, 0);
+        cell.beachNoise = this.beachNoise.compute(x, z, 0);
         this.continent.apply(cell, x, z);
         this.region.apply(cell, x, z);
-		try(NoiseRootRuntime.CoordinateScope ignored = NoiseRootRuntime.scaleCoordinates(this.terrainFrequency)) {
-			this.terrain.apply(cell, x * this.terrainFrequency, z * this.terrainFrequency);
-		}
+        this.terrain.apply(cell, x * this.terrainFrequency, z * this.terrainFrequency);
 	}
 	
 	public void applyRivers(Cell cell, float x, float z, Rivermap rivermap) {
@@ -132,15 +127,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         CellPopulator terrainRegions = new RegionSelector(TerrainProvider.generateTerrain(ctx.seed, terrainSettings, regionConfig, levels, noiseLookup));
         CellPopulator terrainRegionBorders = Populators.makeBorder(ctx.seed, ground, terrainSettings.plains, terrainSettings.steppe, globalVerticalScale);
         CellPopulator terrainBlend = new RegionLerper(terrainRegionBorders, terrainRegions);
-        CellPopulator mountains = Populators.makeMountainChain(
-            mountainSeed,
-            ground,
-            terrainSettings.mountains,
-            terrainSettings.mountains.horizontalScale,
-            globalVerticalScale,
-            general.fancyMountains,
-            general.legacyMountainScaling
-        );
+        CellPopulator mountains = Populators.makeMountainChain(mountainSeed, ground, terrainSettings.mountains, terrainSettings.general.legacyMountainScaling ? 1.0F : terrainSettings.mountains.horizontalScale * 2.25F, terrainSettings.general.legacyMountainScaling ? globalVerticalScale : globalVerticalScale * terrainSettings.mountains.verticalScale, general.fancyMountains, general.legacyMountainScaling);
         Continent continent = world.continent.continentType.create(ctx.seed, ctx);
         Climate climate = Climate.make(continent, ctx);
         CellPopulator land = new Blender(mountainShape, terrainBlend, mountains, 0.3F, 0.8F, 0.575F);
@@ -149,9 +136,10 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         CellPopulator shallowOcean = Populators.makeShallowOcean(ctx.levels);
         CellPopulator coast = Populators.makeCoast(ctx.levels);
         
+        //pass coast/ocean spline to makeIslandPopulator instead of deepOcean
+//        CellPopulator islandsOceans = new ContinentLerper3(coast, shallowOcean, deepOcean, controlPoints.deepOcean, controlPoints.shallowOcean, controlPoints.coast);
         CellPopulator oceans = new ContinentLerper3(deepOcean, shallowOcean, coast, controlPoints.deepOcean, controlPoints.shallowOcean, controlPoints.coast);
-        CellPopulator islandOceans = makeIslandPopulator(ctx.levels, controlPoints, oceans);
-        CellPopulator terrain = new ContinentLerper2(islandOceans, land, controlPoints.shallowOcean, controlPoints.inland);
+        CellPopulator terrain = new ContinentLerper2(oceans, land, controlPoints.shallowOcean, controlPoints.inland);
         
         if (ctx.preset.island().enableArchipelago) {
             terrain = new IslandBlender(terrain, new ArchipelagoPopulator(ctx.preset.island(), ctx.levels, controlPoints), ctx.levels);
@@ -163,17 +151,8 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
         return new Heightmap(terrain, region, continent, climate, levels, controlPoints, terrainFrequency, beachNoise, fakeWaterBiomeResolver);
 	}
 	
-	static CellPopulator makeIslandPopulator(Levels levels, ControlPoints controlPoints, CellPopulator oceans) {
-        if(!usesCustomIslandControlPoints(controlPoints)) {
-            return oceans;
-        }
-        return new IslandPopulator(levels, oceans, controlPoints.islandInland, controlPoints.islandCoast);
-	}
-
-	static boolean usesCustomIslandControlPoints(ControlPoints controlPoints) {
-        boolean initialDefaults = controlPoints.islandInland == INITIAL_ISLAND_INLAND
-            && controlPoints.islandCoast == INITIAL_ISLAND_COAST;
-        return !initialDefaults && controlPoints.islandInland >= 0.0F && controlPoints.islandCoast >= 0.0F;
+	private static CellPopulator makeIslandPopulator(GeneratorContext ctx, ControlPoints controlPoints, CellPopulator oceans) {
+        return new IslandPopulator(ctx.levels, oceans, controlPoints.islandCoast, controlPoints.islandInland);
 	}
 
 	private static boolean isIslandTerrain(Cell cell) {

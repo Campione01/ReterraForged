@@ -43,7 +43,6 @@ public class IslandSettingsPage extends PresetEditorPage {
 		
 		this.enableArchipelago = PresetWidgets.createToggle(island.enableArchipelago, RTFTranslationKeys.GUI_BUTTON_ENABLE_ARCHIPELAGO, (button, value) -> {
 			island.enableArchipelago = value;
-			this.updateDependentControls(value);
 			this.regenerate();
 		});
 		this.islandDensity = PresetWidgets.createFloatSlider(island.islandDensity, 0.0F, 1.0F, RTFTranslationKeys.GUI_SLIDER_ISLAND_DENSITY, (slider, value) -> {
@@ -115,22 +114,6 @@ public class IslandSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.offshoreDepth);
 		this.left.addWidget(this.beachWidth);
 		this.left.addWidget(this.beachCoverage);
-
-		this.updateDependentControls(island.enableArchipelago);
-	}
-
-	private void updateDependentControls(boolean active) {
-		this.islandDensity.active = active;
-		this.islandSize.active = active;
-		this.islandHeight.active = active;
-		this.islandBaseScale.active = active;
-		this.islandVerticalScale.active = active;
-		this.islandHorizontalScale.active = active;
-		this.mountainChance.active = active;
-		this.volcanoChance.active = active;
-		this.offshoreDepth.active = active;
-		this.beachWidth.active = active;
-		this.beachCoverage.active = active;
 	}
 
 	@Override

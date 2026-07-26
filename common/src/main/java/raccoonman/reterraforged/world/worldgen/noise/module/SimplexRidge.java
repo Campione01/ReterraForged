@@ -49,11 +49,6 @@ record SimplexRidge(float frequency, int octaves, float lacunarity, float gain, 
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return true;
-	}
-
-	@Override
 	public float minValue() {
 		return 0.0F;
 	}

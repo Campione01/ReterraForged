@@ -51,18 +51,6 @@ record PerlinRidge(float frequency, int octaves, float lacunarity, float gain, I
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return true;
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		if(!batch.fillNative(this, seed, output)) {
-			Noise.super.fill(batch, seed, output);
-		}
-	}
-
-	@Override
 	public float minValue() {
 		return 0.0F;
 	}

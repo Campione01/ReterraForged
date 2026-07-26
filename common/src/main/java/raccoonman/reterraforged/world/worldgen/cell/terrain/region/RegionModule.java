@@ -42,7 +42,6 @@ public class RegionModule implements CellPopulator {
         int yi = NoiseUtil.floor(py);
         float edgeDistance = Float.MAX_VALUE;
         float edgeDistance2 = Float.MAX_VALUE;
-        Vec2f winningVec = null;
         DistanceFunction dist = DistanceFunction.NATURAL;
         for (int dy = -1; dy <= 1; ++dy) {
             for (int dx = -1; dx <= 1; ++dx) {
@@ -57,7 +56,6 @@ public class RegionModule implements CellPopulator {
                     edgeDistance = distance;
                     cellX = cx;
                     cellY = cy;
-                    winningVec = vec;
                 }
                 else if (distance < edgeDistance2) {
                     edgeDistance2 = distance;
@@ -67,9 +65,7 @@ public class RegionModule implements CellPopulator {
         cell.terrainRegionId = this.cellValue(this.seed, cellX, cellY);
         cell.terrainRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
         
-        if(winningVec == null) {
-            winningVec = NoiseUtil.cell(this.seed, cellX, cellY);
-        }
+        Vec2f winningVec = NoiseUtil.cell(this.seed, cellX, cellY);
         cell.terrainRegionCenterX = (cellX + winningVec.x() * 0.7F) / this.frequency;
         cell.terrainRegionCenterZ = (cellY + winningVec.y() * 0.7F) / this.frequency;
     }

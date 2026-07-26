@@ -40,11 +40,6 @@ public record Simplex2(float frequency, int octaves, float lacunarity, float gai
     }
 
 	@Override
-	public boolean supportsBulk() {
-		return true;
-	}
-
-	@Override
 	public float minValue() {
 		return 0.0F;
 	}

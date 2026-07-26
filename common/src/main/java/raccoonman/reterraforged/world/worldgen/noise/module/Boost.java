@@ -27,23 +27,6 @@ record Boost(Noise input, int iterations) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		this.input.fill(batch, seed, output);
-		for(int index = 0; index < output.length; index++) {
-			float value = output[index];
-			for(int iteration = 0; iteration < this.iterations; iteration++) {
-				value = NoiseUtil.pow(value, 1.0F - value);
-			}
-			output[index] = value;
-		}
-	}
-
-	@Override
 	public float minValue() {
 		return this.input.minValue();
 	}

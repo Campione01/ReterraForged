@@ -1,7 +1,5 @@
 package raccoonman.reterraforged.client.gui.screen.presetconfig;
 
-import java.util.Arrays;
-import java.util.Locale;
 import java.util.Optional;
 
 import com.google.common.collect.ImmutableList;
@@ -10,7 +8,6 @@ import net.minecraft.client.gui.components.CycleButton;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
-import raccoonman.reterraforged.client.gui.Tooltips;
 import raccoonman.reterraforged.client.gui.screen.page.LinkedPageScreen.Page;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
@@ -21,7 +18,6 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.noise.function.DistanceFunction;
 
 public class WorldSettingsPage extends PresetEditorPage {
-	private CycleButton<WorldSettings.NoiseEngine> noiseEngine;
 	private CycleButton<ContinentType> continentType;
 	private CycleButton<DistanceFunction> continentShape;
 	private Slider continentScale;
@@ -65,15 +61,6 @@ public class WorldSettingsPage extends PresetEditorPage {
 		WorldSettings.Continent continent = world.continent;
 		WorldSettings.ControlPoints controlPoints = world.controlPoints;
 		WorldSettings.Properties properties = world.properties;
-
-		this.noiseEngine = CycleButton.<WorldSettings.NoiseEngine>builder(WorldSettingsPage::noiseEngineName)
-			.withInitialValue(world.noiseEngine)
-			.withValues(Arrays.asList(WorldSettings.NoiseEngine.values()))
-			.create(-1, -1, -1, -1, Component.translatable(RTFTranslationKeys.GUI_BUTTON_NOISE_ENGINE), (button, value) -> {
-				world.noiseEngine = value;
-				this.regenerate();
-			});
-		this.noiseEngine.setTooltip(Tooltips.create(Tooltips.translationKey(RTFTranslationKeys.GUI_BUTTON_NOISE_ENGINE)));
 		
 		this.continentType = PresetWidgets.createCycle(
 			ImmutableList.of(
@@ -203,7 +190,6 @@ public class WorldSettingsPage extends PresetEditorPage {
 			return value;
 		});
 		
-		this.left.addWidget(this.noiseEngine);
 		this.left.addWidget(PresetWidgets.createLabel(RTFTranslationKeys.GUI_LABEL_CONTINENT));
 		this.left.addWidget(this.continentType);
 		this.left.addWidget(this.continentShape);
@@ -252,10 +238,6 @@ public class WorldSettingsPage extends PresetEditorPage {
 		this.continentNoiseOctaves.active = isMultiImproved;
 		this.continentNoiseGain.active = isMultiImproved;
 		this.continentNoiseLacunarity.active = isMultiImproved;
-	}
-
-	private static Component noiseEngineName(WorldSettings.NoiseEngine engine) {
-		return Component.translatable(RTFTranslationKeys.GUI_VALUE_NOISE_ENGINE + "." + engine.getSerializedName().toLowerCase(Locale.ROOT));
 	}
 	
 	private static int getNearestMultiple(Slider slider, float value, int multiple)  {

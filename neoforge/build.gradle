@@ -29,11 +29,8 @@ loom {
 configurations {
     common
     shadowCommon
-    platformTestCommon
     compileClasspath.extendsFrom common
     runtimeClasspath.extendsFrom common
-    testCompileClasspath.extendsFrom common
-    testRuntimeClasspath.extendsFrom common
     developmentNeoForge.extendsFrom common
 }
 
@@ -43,17 +40,12 @@ repositories {
 
 dependencies {
     neoForge "net.neoforged:neoforge:$rootProject.neoforge_version"
-    implementation("org.lwjgl:lwjgl-opencl:3.3.3") { transitive false }
-    include("org.lwjgl:lwjgl-opencl:3.3.3") { transitive false }
     
 //	compileOnly "net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}"
 //  modImplementation("com.github.glitchfiend:TerraBlender-forge:${rootProject.minecraft_version}-${rootProject.terrablender_version}")
     
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
-    platformTestCommon(project(path: ":common", configuration: "transformProductionNeoForge")) { transitive false }
-    testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
-    testRuntimeOnly "org.junit.platform:junit-platform-launcher"
 }
 
 sourceSets {
@@ -64,11 +56,6 @@ sourceSets {
             ]
         }
     }
-}
-
-test {
-    useJUnitPlatform()
-    classpath = sourceSets.test.output + sourceSets.main.output + configurations.platformTestCommon + (configurations.testRuntimeClasspath - configurations.common)
 }
 
 processResources {
@@ -84,8 +71,6 @@ processResources {
 shadowJar {
     exclude "fabric.mod.json"
     exclude "architectury.common.json"
-    exclude "module-info.class"
-    exclude "META-INF/versions/**/module-info.class"
 
     configurations = [project.configurations.shadowCommon]
     archiveClassifier.set("shadow")
@@ -96,65 +81,6 @@ remapJar {
 
     input.set shadowJar.archiveFile
     dependsOn shadowJar
-
-    doLast {
-        def jarFile = archiveFile.get().asFile
-        def tempFile = new File(jarFile.parentFile, jarFile.name + ".opencl-module-fix")
-        def input = new java.util.zip.ZipInputStream(new BufferedInputStream(new FileInputStream(jarFile)))
-        def output = new java.util.zip.ZipOutputStream(new BufferedOutputStream(new FileOutputStream(tempFile)))
-        try {
-            for (def entry = input.nextEntry; entry != null; entry = input.nextEntry) {
-                def bytes = input.readAllBytes()
-                if (entry.name == "META-INF/jars/lwjgl-opencl-3.3.3.jar") {
-                    def nestedBytes = new ByteArrayOutputStream()
-                    def nestedInput = new java.util.zip.ZipInputStream(new ByteArrayInputStream(bytes))
-                    def nestedOutput = new java.util.zip.ZipOutputStream(nestedBytes)
-                    try {
-                        for (def nestedEntry = nestedInput.nextEntry; nestedEntry != null; nestedEntry = nestedInput.nextEntry) {
-                            if (nestedEntry.name == "module-info.class" ||
-                                nestedEntry.name.matches("META-INF/versions/[^/]+/module-info\\.class")) {
-                                continue
-                            }
-
-                            def nestedData = nestedInput.readAllBytes()
-                            if (nestedEntry.name == "META-INF/MANIFEST.MF") {
-                                def manifest = new java.util.jar.Manifest(new ByteArrayInputStream(nestedData))
-                                manifest.mainAttributes.putValue("Automatic-Module-Name", "org.lwjgl.opencl")
-                                def manifestBytes = new ByteArrayOutputStream()
-                                manifest.write(manifestBytes)
-                                nestedData = manifestBytes.toByteArray()
-                            }
-
-                            def replacement = new java.util.zip.ZipEntry(nestedEntry.name)
-                            replacement.time = nestedEntry.time
-                            nestedOutput.putNextEntry(replacement)
-                            nestedOutput.write(nestedData)
-                            nestedOutput.closeEntry()
-                        }
-                    } finally {
-                        nestedOutput.close()
-                        nestedInput.close()
-                    }
-                    bytes = nestedBytes.toByteArray()
-                }
-
-                def replacement = new java.util.zip.ZipEntry(entry.name)
-                replacement.time = entry.time
-                output.putNextEntry(replacement)
-                output.write(bytes)
-                output.closeEntry()
-            }
-        } finally {
-            output.close()
-            input.close()
-        }
-
-        java.nio.file.Files.move(
-            tempFile.toPath(),
-            jarFile.toPath(),
-            java.nio.file.StandardCopyOption.REPLACE_EXISTING
-        )
-    }
 }
 
 jar {
@@ -176,73 +102,4 @@ components.java {
     withVariantsFromConfiguration(project.configurations.shadowRuntimeElements) {
         skip()
     }
-}
-
-tasks.register("verifyOpenClPackaging") {
-    dependsOn remapJar
-
-    doLast {
-        def jarFile = remapJar.archiveFile.get().asFile
-        def zip = new java.util.zip.ZipFile(jarFile)
-        try {
-            def rootOpenCl = 0
-            def nestedOpenCl = 0
-            def nestedCore = 0
-            for (def entries = zip.entries(); entries.hasMoreElements();) {
-                def name = entries.nextElement().name
-                rootOpenCl += name.startsWith("org/lwjgl/opencl/") ? 1 : 0
-                nestedOpenCl += name == "META-INF/jars/lwjgl-opencl-3.3.3.jar" ? 1 : 0
-                nestedCore += name == "META-INF/jars/lwjgl-3.3.3.jar" ? 1 : 0
-            }
-
-            if (rootOpenCl != 0 || nestedOpenCl != 1 || nestedCore != 0) {
-                throw new GradleException("Invalid LWJGL OpenCL packaging: root=${rootOpenCl}, nested=${nestedOpenCl}, core=${nestedCore}")
-            }
-
-            def metadataEntry = zip.getEntry("META-INF/jarjar/metadata.json")
-            if (metadataEntry == null) {
-                throw new GradleException("Missing NeoForge JarJar metadata")
-            }
-            def metadata
-            zip.getInputStream(metadataEntry).withCloseable {
-                metadata = new groovy.json.JsonSlurper().parse(it)
-            }
-            def declarations = metadata.jars.findAll {
-                it.identifier.group == "org.lwjgl" &&
-                    it.identifier.artifact == "lwjgl-opencl" &&
-                    it.version.artifactVersion == "3.3.3" &&
-                    it.path == "META-INF/jars/lwjgl-opencl-3.3.3.jar"
-            }
-            if (declarations.size() != 1) {
-                throw new GradleException("Expected one deduplicatable org.lwjgl:lwjgl-opencl:3.3.3 declaration")
-            }
-
-            def nestedEntry = zip.getEntry("META-INF/jars/lwjgl-opencl-3.3.3.jar")
-            def nestedInput = new java.util.zip.ZipInputStream(zip.getInputStream(nestedEntry))
-            def moduleDescriptors = 0
-            def automaticModuleName = null
-            try {
-                for (def entry = nestedInput.nextEntry; entry != null; entry = nestedInput.nextEntry) {
-                    if (entry.name == "module-info.class" || entry.name.matches("META-INF/versions/[^/]+/module-info\\.class")) {
-                        moduleDescriptors++
-                    }
-                    if (entry.name == "META-INF/MANIFEST.MF") {
-                        def manifest = new java.util.jar.Manifest(nestedInput)
-                        automaticModuleName = manifest.mainAttributes.getValue("Automatic-Module-Name")
-                    }
-                }
-            } finally {
-                nestedInput.close()
-            }
-            if (moduleDescriptors != 0 || automaticModuleName != "org.lwjgl.opencl") {
-                throw new GradleException("Nested OpenCL must be an automatic org.lwjgl.opencl module without a hard org.lwjgl requirement")
-            }
-        } finally {
-            zip.close()
-        }
-    }
-}
-
-tasks.named("check") {
-    dependsOn tasks.named("verifyOpenClPackaging")
 }

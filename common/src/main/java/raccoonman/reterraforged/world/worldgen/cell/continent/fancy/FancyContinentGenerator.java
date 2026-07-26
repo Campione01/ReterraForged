@@ -43,8 +43,8 @@ public class FancyContinentGenerator implements Continent {
     
     @Override
     public float getEdgeValue(float x, float y) {
-        float px = this.warp.getRootX(x, y, 0);
-        float py = this.warp.getRootZ(x, y, 0);
+        float px = this.warp.getX(x, y, 0);
+        float py = this.warp.getZ(x, y, 0);
         px *= this.frequency;
         py *= this.frequency;
         return this.source.getEdgeValue(px, py, 0);
@@ -52,8 +52,8 @@ public class FancyContinentGenerator implements Continent {
     
     @Override
     public float getLandValue(float x, float y) {
-        float px = this.warp.getRootX(x, y, 0);
-        float py = this.warp.getRootZ(x, y, 0);
+        float px = this.warp.getX(x, y, 0);
+        float py = this.warp.getZ(x, y, 0);
         px *= this.frequency;
         py *= this.frequency;
         float value = this.source.getLandValue(px, py);

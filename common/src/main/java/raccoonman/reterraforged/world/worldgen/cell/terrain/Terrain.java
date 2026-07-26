@@ -34,7 +34,7 @@ public class Terrain implements ITerrain.Delegate {
     public TerrainCategory getCategory() {
         return this.type;
     }
-
+    
     public float getRenderHue() {
         return NoiseUtil.valCoord2D(this.name.hashCode(), 0, 0);
     }

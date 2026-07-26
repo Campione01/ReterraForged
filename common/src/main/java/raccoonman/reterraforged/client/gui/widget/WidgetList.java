@@ -52,27 +52,17 @@ public class WidgetList<T extends AbstractWidget> extends ContainerObjectSelecti
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        // Forward drag events to any preview widget (assuming only one)
         for (Entry<T> entry : this.children()) {
             T widget = entry.getWidget();
-            if (widget instanceof PresetEditorPage.Preview preview && preview.isDraggingPreview()) {
+            if (widget instanceof PresetEditorPage.Preview preview) {
+                // Always forward drag events to preview, regardless of mouse position
                 if (preview.mouseDragged(mouseX, mouseY, button, dragX, dragY)) {
                     return true;
                 }
             }
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
-    }
-
-    @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        for (Entry<T> entry : this.children()) {
-            T widget = entry.getWidget();
-            if (widget instanceof PresetEditorPage.Preview preview && preview.isDraggingPreview()) {
-                preview.mouseReleased(mouseX, mouseY, button);
-                return true;
-            }
-        }
-        return super.mouseReleased(mouseX, mouseY, button);
     }
 
     @Override

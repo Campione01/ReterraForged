@@ -16,16 +16,6 @@ record ShiftSeed(Noise input, int shift) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		this.input.fill(batch, seed + this.shift, output);
-	}
-
-	@Override
 	public Noise mapAll(Visitor visitor) {
 		return visitor.apply(new ShiftSeed(this.input.mapAll(visitor), this.shift));
 	}

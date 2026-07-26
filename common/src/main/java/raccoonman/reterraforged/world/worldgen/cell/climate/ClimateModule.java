@@ -3,7 +3,6 @@ package raccoonman.reterraforged.world.worldgen.cell.climate;
 import raccoonman.reterraforged.data.worldgen.preset.settings.ClimateSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
-import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.world.worldgen.biome.Humidity;
 import raccoonman.reterraforged.world.worldgen.biome.Temperature;
 import raccoonman.reterraforged.world.worldgen.cell.Cell;
@@ -20,7 +19,6 @@ import raccoonman.reterraforged.world.worldgen.noise.module.LegacyMoisture;
 import raccoonman.reterraforged.world.worldgen.noise.module.LegacyTemperature;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
-import raccoonman.reterraforged.world.worldgen.noise.module.NoiseRootRuntime;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 public class ClimateModule {
@@ -35,9 +33,8 @@ public class ClimateModule {
 	private Continent continent;
 	private ControlPoints controlPoints;
 	private Levels levels;
-	private boolean cacheRegions;
 	
-	public ClimateModule(Seed seed, Continent continent, WorldSettings.ControlPoints controlPoints, ClimateSettings climateSettings, Levels levels, boolean cacheRegions) {
+	public ClimateModule(Seed seed, Continent continent, WorldSettings.ControlPoints controlPoints, ClimateSettings climateSettings, Levels levels) {
 		int biomeSize = climateSettings.biomeShape.biomeSize;
 		
 		float tempScaler = (float) climateSettings.temperature.scale;
@@ -56,7 +53,6 @@ public class ClimateModule {
 		this.controlPoints = controlPoints;
 		this.warpStrength = (float) climateSettings.biomeShape.biomeWarpStrength;
 		this.levels = levels;
-		this.cacheRegions = cacheRegions;
 		
 		Noise warpX = Noises.simplex(seed.next(), warpScale, 2);
 		warpX = Noises.add(warpX, -0.5F);
@@ -95,8 +91,8 @@ public class ClimateModule {
 	}
 
 	public void apply(Cell cell, float x, float z, float originalX, float originalZ, boolean mask) {
-		float ox = this.warpX.computeRoot(x, z, 0) * this.warpStrength;
-		float oz = this.warpZ.computeRoot(x, z, 0) * this.warpStrength;
+		float ox = this.warpX.compute(x, z, 0) * this.warpStrength;
+		float oz = this.warpZ.compute(x, z, 0) * this.warpStrength;
 		x += ox;
 		z += oz;
 		x *= this.biomeFreq;
@@ -110,15 +106,11 @@ public class ClimateModule {
 		float edgeDistance = 999999.0F;
 		float edgeDistance2 = 999999.0F;
 		DistanceFunction dist = DistanceFunction.EUCLIDEAN;
-		int xPrimeStart = NoiseUtil.X_PRIME * (xr - 1);
-		int yPrime = NoiseUtil.Y_PRIME * (zr - 1);
 		for (int dz = -1; dz <= 1; ++dz) {
-			int xPrime = xPrimeStart;
 			for (int dx = -1; dx <= 1; ++dx) {
 				int cx = xr + dx;
 				int cz = zr + dz;
-				Vec2f vec = NoiseUtil.cellPrimed(this.seed, xPrime, yPrime);
-				xPrime += NoiseUtil.X_PRIME;
+				Vec2f vec = NoiseUtil.cell(this.seed, cx, cz);
 				float cxf = cx + vec.x();
 				float czf = cz + vec.y();
 				float distance = dist.apply(cxf - x, czf - z);
@@ -133,94 +125,48 @@ public class ClimateModule {
 					edgeDistance2 = distance;
 				}
 			}
-			yPrime += NoiseUtil.Y_PRIME;
 		}
-		try(NoiseRootRuntime.LegacyScope ignored = NoiseRootRuntime.legacyCoordinates()) {
-			cell.biomeRegionId = this.cellValue(this.seed, cellX, cellZ);
-			ClimateCache cache = this.getCache();
-			float rawRegionMoisture;
-			float rawRegionTemperature;
-			float macroBiomeId;
-			float continentEdge;
-			if(cache != null && cache.regionMatches(cellX, cellZ)) {
-				rawRegionMoisture = cache.regionMoisture;
-				rawRegionTemperature = cache.regionTemperature;
-				macroBiomeId = cache.macroBiomeId;
-				continentEdge = cache.continentEdge;
-			} else {
-				rawRegionMoisture = this.moisture.computeRoot(centerX, centerZ, 0);
-				rawRegionTemperature = this.temperature.computeRoot(centerX, centerZ, 0);
-				macroBiomeId = this.macroBiomeNoise.computeRoot(centerX, centerZ, 0);
-				int posX = NoiseUtil.floor(centerX / this.biomeFreq);
-				int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
-				continentEdge = this.continent.getLandValue(posX, posZ);
-				if(cache != null) {
-					cache.storeRegion(cellX, cellZ, rawRegionMoisture, rawRegionTemperature, macroBiomeId, continentEdge);
-				}
-			}
-			cell.regionMoisture = rawRegionMoisture;
-			cell.regionTemperature = rawRegionTemperature;
-			cell.macroBiomeId = macroBiomeId;
-			if (mask) {
-				cell.biomeRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
-				this.modifyTerrain(cell, continentEdge);
-			}
-			cell.regionMoisture = this.modifyMoisture(cell.regionMoisture, continentEdge);
+		cell.biomeRegionId = this.cellValue(this.seed , cellX, cellZ);
+		cell.regionMoisture = this.moisture.compute(centerX, centerZ, 0);
+		cell.regionTemperature = this.temperature.compute(centerX, centerZ, 0);
+		cell.macroBiomeId = this.macroBiomeNoise.compute(centerX, centerZ, 0);
+		int posX = NoiseUtil.floor(centerX / this.biomeFreq);
+		int posZ = NoiseUtil.floor(centerZ / this.biomeFreq);
+		float continentEdge = this.continent.getLandValue(posX, posZ);
+		if (mask) {
+			cell.biomeRegionEdge = this.edgeValue(edgeDistance, edgeDistance2);
+			this.modifyTerrain(cell, continentEdge);
+		}
+		cell.regionMoisture = this.modifyMoisture(cell.regionMoisture, continentEdge);
 
-			cell.biome = BiomeType.get(cell.regionTemperature, cell.regionMoisture);
-			cell.regionTemperature = this.modifyTemp(cell.height, cell.regionTemperature, originalX, originalZ);
+		cell.biome = BiomeType.get(cell.regionTemperature, cell.regionMoisture);
+		cell.regionTemperature = this.modifyTemp(cell.height, cell.regionTemperature, originalX, originalZ);
 
+        cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
+        cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
+
+		if (cell.terrain != null && cell.terrain.getCategory() == TerrainCategory.HIGHLAND) {
+			float mtnFreqX = cell.terrainRegionCenterX * this.biomeFreq;
+			float mtnFreqZ = cell.terrainRegionCenterZ * this.biomeFreq;
+
+			float mtnTemp = this.temperature.compute(mtnFreqX, mtnFreqZ, 0);
+			float mtnMoist = this.moisture.compute(mtnFreqX, mtnFreqZ, 0);
+			cell.biome = BiomeType.get(mtnTemp, mtnMoist);
 			cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
 			cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
-
-			if (cell.terrain != null && cell.terrain.getCategory() == TerrainCategory.HIGHLAND) {
-				float mtnFreqX = cell.terrainRegionCenterX * this.biomeFreq;
-				float mtnFreqZ = cell.terrainRegionCenterZ * this.biomeFreq;
-
-				float mtnTemp;
-				float mtnMoist;
-				if(cache != null && cache.highlandMatches(mtnFreqX, mtnFreqZ)) {
-					mtnTemp = cache.highlandTemperature;
-					mtnMoist = cache.highlandMoisture;
-				} else {
-					mtnTemp = this.temperature.computeRoot(mtnFreqX, mtnFreqZ, 0);
-					mtnMoist = this.moisture.computeRoot(mtnFreqX, mtnFreqZ, 0);
-					if(cache != null) {
-						cache.storeHighland(mtnFreqX, mtnFreqZ, mtnTemp, mtnMoist);
-					}
-				}
-				cell.biome = BiomeType.get(mtnTemp, mtnMoist);
-				cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
-				cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
-			}
-
-			if (cell.terrain == TerrainType.ISLAND_BEACH) {
-				cell.biome = BiomeType.SAVANNA;
-				cell.temperature = Temperature.LEVEL_3.mid();
-				cell.moisture = Humidity.LEVEL_1.mid();
-			} else if (cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_MOUNTAINS) {
-				cell.biome = BiomeType.get(rawRegionTemperature, rawRegionMoisture);
-				cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
-				cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
-			}
 		}
-	}
 
-	private ClimateCache getCache() {
-		if(!this.cacheRegions) {
-			return null;
+		if (cell.terrain == TerrainType.ISLAND_BEACH) {
+			cell.biome = BiomeType.SAVANNA;
+			cell.temperature = Temperature.LEVEL_3.mid();
+			cell.moisture = Humidity.LEVEL_1.mid();
+		} else if (cell.terrain == TerrainType.ISLAND || cell.terrain == TerrainType.ISLAND_MOUNTAINS) {
+			float islTemp = this.temperature.compute(centerX, centerZ, 0);
+			float islMoist = this.moisture.compute(centerX, centerZ, 0);
+			cell.biome = BiomeType.get(islTemp, islMoist);
+			cell.temperature = cell.biome.getTemperature(cell.biomeRegionId);
+			cell.moisture = cell.biome.getMoisture(cell.biomeRegionId);
 		}
-		Thread thread = Thread.currentThread();
-		if(!(thread instanceof ThreadPools.WorkerThread worker)) {
-			return null;
-		}
-		Object scratch = worker.worldgenScratch(this);
-		if(scratch instanceof ClimateCache cache) {
-			return cache;
-		}
-		ClimateCache cache = new ClimateCache();
-		worker.worldgenScratch(this, cache);
-		return cache;
 	}
 
 	private float modifyTemp(float height, float temp, float x, float z) {
@@ -270,48 +216,5 @@ public class ClimateModule {
 		float value = edge.apply(distance, distance2);
 		value = 1.0F - NoiseUtil.map(value, edge.min(), edge.max(), edge.range());
 		return value;
-	}
-
-	private static final class ClimateCache {
-		private boolean regionValid;
-		private int regionX;
-		private int regionZ;
-		private float regionMoisture;
-		private float regionTemperature;
-		private float macroBiomeId;
-		private float continentEdge;
-		private boolean highlandValid;
-		private int highlandXBits;
-		private int highlandZBits;
-		private float highlandTemperature;
-		private float highlandMoisture;
-
-		private boolean regionMatches(int x, int z) {
-			return this.regionValid && this.regionX == x && this.regionZ == z;
-		}
-
-		private void storeRegion(int x, int z, float moisture, float temperature, float macroBiomeId, float continentEdge) {
-			this.regionValid = true;
-			this.regionX = x;
-			this.regionZ = z;
-			this.regionMoisture = moisture;
-			this.regionTemperature = temperature;
-			this.macroBiomeId = macroBiomeId;
-			this.continentEdge = continentEdge;
-		}
-
-		private boolean highlandMatches(float x, float z) {
-			return this.highlandValid
-				&& this.highlandXBits == Float.floatToRawIntBits(x)
-				&& this.highlandZBits == Float.floatToRawIntBits(z);
-		}
-
-		private void storeHighland(float x, float z, float temperature, float moisture) {
-			this.highlandValid = true;
-			this.highlandXBits = Float.floatToRawIntBits(x);
-			this.highlandZBits = Float.floatToRawIntBits(z);
-			this.highlandTemperature = temperature;
-			this.highlandMoisture = moisture;
-		}
 	}
 }

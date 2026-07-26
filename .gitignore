@@ -112,14 +112,11 @@ gradle-app.setting
 
 **/build/
 
-native/target/
-
 **/src/generated/
 **/src/main/generated/
 
 # Common working directory
 run/
-.planning/
 
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar

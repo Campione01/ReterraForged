@@ -6,10 +6,9 @@ import com.mojang.serialization.codecs.RecordCodecBuilder;
 
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise.Visitor;
-import raccoonman.reterraforged.world.worldgen.noise.module.NoiseBatch;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 
-public record DomainWarp(Noise x, Noise z, Noise mappedX, Noise mappedZ, Noise distance) implements Domain {
+record DomainWarp(Noise x, Noise z, Noise mappedX, Noise mappedZ, Noise distance) implements Domain {
 	public static final MapCodec<DomainWarp> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
 		Noise.HOLDER_HELPER_CODEC.fieldOf("x").forGetter(DomainWarp::x),
 		Noise.HOLDER_HELPER_CODEC.fieldOf("z").forGetter(DomainWarp::z),
@@ -28,49 +27,6 @@ public record DomainWarp(Noise x, Noise z, Noise mappedX, Noise mappedZ, Noise d
 	@Override
 	public float getOffsetZ(float x, float z, int seed) {
 		return this.mappedZ.compute(x, z, seed) * this.distance.compute(x, z, seed);
-	}
-
-	@Override
-	public boolean supportsBulk() {
-		return this.mappedX.supportsBulk() && this.mappedZ.supportsBulk() && this.distance.supportsBulk();
-	}
-
-	@Override
-	public void fillOffsetX(NoiseBatch batch, int seed, float[] output) {
-		this.mappedX.fill(batch, seed, output);
-		float[] distanceValues = batch.acquire();
-		try {
-			this.distance.fill(batch, seed, distanceValues);
-			for(int index = 0; index < output.length; index++) {
-				output[index] = output[index] * distanceValues[index];
-			}
-		} finally {
-			batch.release(distanceValues);
-		}
-	}
-
-	@Override
-	public void fillOffsetZ(NoiseBatch batch, int seed, float[] output) {
-		this.mappedZ.fill(batch, seed, output);
-		float[] distanceValues = batch.acquire();
-		try {
-			this.distance.fill(batch, seed, distanceValues);
-			for(int index = 0; index < output.length; index++) {
-				output[index] = output[index] * distanceValues[index];
-			}
-		} finally {
-			batch.release(distanceValues);
-		}
-	}
-
-	@Override
-	public float getRootOffsetX(float x, float z, int seed) {
-		return this.mappedX.computeRoot(x, z, seed) * this.distance.computeRoot(x, z, seed);
-	}
-
-	@Override
-	public float getRootOffsetZ(float x, float z, int seed) {
-		return this.mappedZ.computeRoot(x, z, seed) * this.distance.computeRoot(x, z, seed);
 	}
 
 	@Override

@@ -5,18 +5,11 @@ import java.io.Reader;
 import java.io.Writer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
-import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 import org.apache.commons.compress.utils.FileNameUtils;
 import org.jetbrains.annotations.Nullable;
@@ -55,15 +48,8 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 	private static final Path PRESET_PATH = ConfigUtil.rtf("presets");
 	private static final Path EXPORT_PATH = ConfigUtil.rtf("exports");
 	private static final Path LEGACY_PRESET_PATH = ConfigUtil.legacy("presets");
-	private static final Map<Path, CachedPreset> PRESET_CACHE = new HashMap<>();
 	
 	private static final Predicate<String> IS_VALID = Pattern.compile("^[A-Za-z0-9\\-_ ]+$").asPredicate();
-
-	private record CachedPreset(FileTime modified, long size, @Nullable Preset preset) {
-		private boolean matches(FileTime modified, long size) {
-			return this.modified.equals(modified) && this.size == size;
-		}
-	}
 
 	private EditBox input;
 	private Button createPreset;
@@ -120,7 +106,6 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		this.deletePreset = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_DELETE, () -> {
 			PresetEntry preset = this.left.getSelected().getWidget();
 			Files.delete(preset.getPath());
-			invalidatePresetCache(preset.getPath());
 			this.rebuildPresets();
 		});
 		this.openPresetFolder = PresetWidgets.createThrowingButton(RTFTranslationKeys.GUI_BUTTON_OPEN_PRESET_FOLDER, () -> {
@@ -201,15 +186,8 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		this.selectPreset(null);
 		
 		List<PresetEntry> entries = new ArrayList<>();
-		List<PresetEntry> currentPresets = this.listPresets(PRESET_PATH);
-		entries.addAll(currentPresets);
-		Set<String> names = new HashSet<>();
-		currentPresets.forEach((entry) -> names.add(entry.getName().getString().toLowerCase(Locale.ROOT)));
-		for(PresetEntry entry : this.listPresets(LEGACY_PRESET_PATH)) {
-			if(names.add(entry.getName().getString().toLowerCase(Locale.ROOT))) {
-				entries.add(entry);
-			}
-		}
+		entries.addAll(this.listPresets(PRESET_PATH));
+		entries.addAll(this.listPresets(LEGACY_PRESET_PATH));
 
 		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeRTFDefault(), true, this));
 		entries.add(new PresetEntry(Component.translatable(RTFTranslationKeys.GUI_DEFAULT_LEGACY_PRESET_NAME).withStyle(ChatFormatting.GRAY), Presets.makeLegacyDefault(), true, this));
@@ -233,97 +211,41 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 	private List<PresetEntry> listPresets(Path path) throws IOException	{
 		List<PresetEntry> presets = new ArrayList<>();
 		if(Files.exists(path)) {
-			try(Stream<Path> paths = Files.list(path)) {
-				for(Path presetPath : paths
-					.filter(Files::isRegularFile)
-					.filter((file) -> file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".json"))
-					.toList()
-				) {
-					Optional<Preset> preset = loadPreset(presetPath);
-					if(preset.isPresent()) {
-						String base = FileNameUtils.getBaseName(presetPath.toString());
-						presets.add(new PresetEntry(Component.literal(base), preset.get(), presetPath, this));
+			for(Path presetPath : Files.list(path)
+				.filter(Files::isRegularFile)
+				.toList()
+			) {
+				try(Reader reader = Files.newBufferedReader(presetPath)) {
+					String base = FileNameUtils.getBaseName(presetPath.toString());
+					DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
+					Optional<Error<Preset>> error = result.error();
+					if(error.isPresent()) {
+						RTFCommon.LOGGER.error(error.get().message());
+						continue;
 					}
+					Preset preset = result.result().get();
+					presets.add(new PresetEntry(Component.literal(base), preset, false, this));
 				}
 			}
 		}
 		return presets;
-	}
-
-	private static Optional<Preset> loadPreset(Path presetPath) {
-		Path cacheKey = presetPath.toAbsolutePath().normalize();
-		FileTime modified;
-		long size;
-		try {
-			modified = Files.getLastModifiedTime(presetPath);
-			size = Files.size(presetPath);
-		} catch(IOException exception) {
-			RTFCommon.LOGGER.error("Failed to inspect preset {}", presetPath, exception);
-			return Optional.empty();
-		}
-
-		synchronized(PRESET_CACHE) {
-			CachedPreset cached = PRESET_CACHE.get(cacheKey);
-			if(cached != null && cached.matches(modified, size)) {
-				return cached.preset == null ? Optional.empty() : Optional.of(cached.preset.copy());
-			}
-		}
-
-		Preset decoded = null;
-		try(Reader reader = Files.newBufferedReader(presetPath)) {
-			DataResult<Preset> result = Preset.DIRECT_CODEC.parse(JsonOps.INSTANCE, JsonParser.parseReader(reader));
-			Optional<Error<Preset>> error = result.error();
-			if(error.isPresent()) {
-				RTFCommon.LOGGER.error("Failed to decode preset {}: {}", presetPath, error.get().message());
-			} else {
-				decoded = result.result().orElseThrow();
-			}
-		} catch(Exception exception) {
-			RTFCommon.LOGGER.error("Failed to load preset {}", presetPath, exception);
-		}
-
-		synchronized(PRESET_CACHE) {
-			PRESET_CACHE.put(cacheKey, new CachedPreset(modified, size, decoded == null ? null : decoded.copy()));
-		}
-		return Optional.ofNullable(decoded);
-	}
-
-	private static void invalidatePresetCache(Path presetPath) {
-		synchronized(PRESET_CACHE) {
-			PRESET_CACHE.remove(presetPath.toAbsolutePath().normalize());
-		}
 	}
 	
 	public static class PresetEntry extends Label {
 		private Component name;
 		private Preset preset;
 		private boolean builtin;
-		@Nullable
-		private Path sourcePath;
 		
 		public PresetEntry(Component name, Preset preset, boolean builtin, OnPress onPress) {
-			this(name, preset, builtin, builtin ? null : PRESET_PATH.resolve(name.getString() + ".json"), onPress);
-		}
-
-		private PresetEntry(Component name, Preset preset, boolean builtin, @Nullable Path sourcePath, OnPress onPress) {
 			super(-1, -1, -1, -1, onPress, name);
 			
 			this.name = name;
 			this.preset = preset;
 			this.builtin = builtin;
-			this.sourcePath = sourcePath;
 		}
 		
 		public PresetEntry(Component name, Preset preset, boolean builtin, PresetListPage page) {
 			this(name, preset, builtin, (b) -> {
-				if(b instanceof PresetEntry entry) {
-					page.selectPreset(entry);
-				}
-			});
-		}
-
-		public PresetEntry(Component name, Preset preset, Path sourcePath, PresetListPage page) {
-			this(name, preset, false, sourcePath, (b) -> {
 				if(b instanceof PresetEntry entry) {
 					page.selectPreset(entry);
 				}
@@ -343,9 +265,10 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 		}
 		
 		public Path getPath() {
-			return this.sourcePath != null ? this.sourcePath : PRESET_PATH.resolve(this.name.getString() + ".json");
+			return PRESET_PATH.resolve(this.name.getString() + ".json");
 		}
 		
+		//FIXME delete old pack before save
 		public void save() throws IOException {
 			if(!this.builtin) {
 				try(
@@ -357,7 +280,6 @@ class PresetListPage extends BisectedPage<PresetConfigScreen, PresetEntry, Abstr
 					jsonWriter.setIndent("  ");
 					GsonHelper.writeValue(jsonWriter, element, null);
 				}
-				invalidatePresetCache(this.getPath());
 			}
 		}
 	}

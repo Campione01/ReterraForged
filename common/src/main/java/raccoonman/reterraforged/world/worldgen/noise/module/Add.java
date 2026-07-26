@@ -16,25 +16,6 @@ record Add(Noise input1, Noise input2) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input1.supportsBulk() && this.input2.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		this.input1.fill(batch, seed, output);
-		float[] right = batch.acquire();
-		try {
-			this.input2.fill(batch, seed, right);
-			for(int index = 0; index < output.length; index++) {
-				output[index] = output[index] + right[index];
-			}
-		} finally {
-			batch.release(right);
-		}
-	}
-
-	@Override
 	public float minValue() {
 		return this.input1.minValue() + this.input2.minValue();
 	}

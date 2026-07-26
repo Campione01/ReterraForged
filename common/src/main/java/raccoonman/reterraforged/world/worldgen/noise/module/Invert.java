@@ -19,21 +19,6 @@ record Invert(Noise input) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		this.input.fill(batch, seed, output);
-		float min = this.input.minValue();
-		float max = this.input.maxValue();
-		for(int index = 0; index < output.length; index++) {
-			output[index] = max - NoiseUtil.clamp(output[index], min, max);
-		}
-	}
-
-	@Override
 	public float minValue() {
 		return this.input.minValue();
 	}

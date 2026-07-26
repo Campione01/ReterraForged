@@ -14,13 +14,13 @@ public record TerrainPopulator(Terrain type, Noise base, Noise height, Noise ero
 	
     @Override
     public void apply(Cell cell, float x, float z) {
-        float base = this.base.computeRoot(x, z, 0) * this.baseScale;
-        float height = this.height.computeRoot(x, z, 0) * this.heightScale;
+        float base = this.base.compute(x, z, 0) * this.baseScale;
+        float height = this.height.compute(x, z, 0) * this.heightScale;
 
         cell.terrain = this.type;
         cell.height = Math.max(base + height, 0.0F);
-        cell.erosion = this.erosion.computeRoot(x, z, 0);
-        cell.weirdness = this.weirdness.computeRoot(x, z, 0);
+        cell.erosion = this.erosion.compute(x, z, 0);
+        cell.weirdness = this.weirdness.compute(x, z, 0);
     }
     
     public static TerrainPopulator make(Terrain type, Noise base, Noise height, Noise erosion, Noise weirdness, TerrainSettings.Terrain settings) {

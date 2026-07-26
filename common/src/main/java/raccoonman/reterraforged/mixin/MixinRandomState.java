@@ -18,7 +18,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunction.NoiseHolder;
-import net.minecraft.world.level.levelgen.DensityFunctions;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -28,21 +27,15 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.config.PerformanceConfig;
 import raccoonman.reterraforged.data.worldgen.compat.terrablender.TBNoiseRouterData;
-import raccoonman.reterraforged.data.worldgen.preset.settings.CaveSettings.DensityAlgorithm;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.tags.RTFDensityFunctionTags;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
-import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionClimateSampler;
-import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionModifier;
-import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.NoiseFunction;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
-import raccoonman.reterraforged.world.worldgen.opencl.OpenClManager;
-import raccoonman.reterraforged.world.worldgen.quicknoise.QuickCaveDensity;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBClimateSampler;
 import raccoonman.reterraforged.world.worldgen.terrablender.TBCompat;
 
@@ -66,8 +59,6 @@ class MixinRandomState {
 	
 	private long seed;
 	private NoiseGeneratorSettings noiseGeneratorSettings;
-	private int reterraforged$repairedCellSamplerCacheOnceMarkers;
-	private boolean reterraforged$reportedCellSamplerCacheOnceRepair;
 	
 	@Redirect(
 		at = @At(
@@ -84,9 +75,6 @@ class MixinRandomState {
 			
 			@Override
 			public DensityFunction apply(DensityFunction function) {
-				if(function instanceof QuickCaveDensity.Marker marker) {
-					return marker.seeded(seed);
-				}
 				if(function instanceof NoiseFunction.Marker marker) {
 					return new NoiseFunction(marker.noise(), (int) seed);
 				}
@@ -97,15 +85,6 @@ class MixinRandomState {
 						return context != null ? context.lookup : null;
 					}, marker.field());
 				}
-				// Older Quickterraforged preset packs persisted this exact holder-backed
-				// cache shape around sloped_cheese, where it aliases a mapped CellSampler.
-				if(function instanceof DensityFunctions.Marker marker
-					&& marker.type() == DensityFunctions.Marker.Type.CacheOnce
-					&& marker.wrapped() instanceof DensityFunctions.HolderHolder holder
-					&& reterraforged$containsCellSampler(holder.function().value())) {
-					MixinRandomState.this.reterraforged$repairedCellSamplerCacheOnceMarkers++;
-					return marker.wrapped();
-				}
 				return visitor.apply(function);
 			}
 
@@ -114,9 +93,7 @@ class MixinRandomState {
 	            return visitor.visitNoise(noiseHolder);
 	        }
 		};
-		NoiseRouter mapped = router.mapAll(this.densityFunctionWrapper);
-		this.reterraforged$reportCellSamplerCacheOnceRepair();
-		return mapped;
+		return router.mapAll(this.densityFunctionWrapper);
 	}
 
 	public void reterraforged$RTFRandomState$initialize(ServerLevel level) {
@@ -141,16 +118,9 @@ class MixinRandomState {
 				tbClimateSampler.setUniqueness(uniqueness.value().mapAll(this.densityFunctionWrapper));
 			});
 		}
-		this.reterraforged$reportCellSamplerCacheOnceRepair();
 		
 		presets.get(Preset.KEY).ifPresentOrElse((presetHolder) -> {
 			this.preset = presetHolder.value();
-			if(OpenClManager.isEnabledByConfig() && this.preset.caves().densityAlgorithm != DensityAlgorithm.QUICK_V1) {
-				RTFCommon.LOGGER.info(
-					"RTF OpenCL final-density acceleration is disabled for {} until full-world CPU parity is established; using the CPU cave backend",
-					this.preset.caves().densityAlgorithm
-				);
-			}
 
 			if(this.hasContext) {
 				PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
@@ -158,7 +128,6 @@ class MixinRandomState {
 					.orElseGet(PerformanceConfig::makeDefault);
 				this.generatorContext = GeneratorContext.makeCached(this.preset, noises, (int) this.seed, config.tileSize(), config.batchCount(), ThreadPools.availableProcessors() > 4);
 			}
-			this.configureBiomeSelectionSampler(this.preset);
 		}, () -> {
 			if(this.hasContext) {
 //				throw new IllegalStateException("Missing preset!");
@@ -178,77 +147,16 @@ class MixinRandomState {
 
 	@Nullable
 	public DensityFunction reterraforged$RTFRandomState$wrap(DensityFunction function) {
-		DensityFunction mapped = function.mapAll(this.densityFunctionWrapper);
-		this.reterraforged$reportCellSamplerCacheOnceRepair();
-		return mapped;
+		return function.mapAll(this.densityFunctionWrapper);
 	}
 
 	public Noise reterraforged$RTFRandomState$seed(Noise noise) {
 		return Noises.shiftSeed(noise, (int) this.seed);
 	}
 
-	private static boolean reterraforged$containsCellSampler(DensityFunction root) {
-		if(root instanceof CellSampler) {
-			return true;
-		}
-		boolean[] found = { false };
-		root.mapAll(new DensityFunction.Visitor() {
-			@Override
-			public DensityFunction apply(DensityFunction function) {
-				if(function instanceof CellSampler) {
-					found[0] = true;
-				}
-				return function;
-			}
-		});
-		return found[0];
-	}
-
-	private void reterraforged$reportCellSamplerCacheOnceRepair() {
-		if(this.reterraforged$reportedCellSamplerCacheOnceRepair || this.reterraforged$repairedCellSamplerCacheOnceMarkers == 0) {
-			return;
-		}
-		this.reterraforged$reportedCellSamplerCacheOnceRepair = true;
-		RTFCommon.LOGGER.warn(
-			"Repaired {} persisted cache_once density marker(s) containing RTF CellSampler nodes for this RandomState",
-			this.reterraforged$repairedCellSamplerCacheOnceMarkers
-		);
-	}
-
 	private void clearGeneratorContext() {
-		if(this.generatorContext != null) {
-			this.generatorContext.close();
-		}
-		if((Object) this.sampler instanceof BiomeSelectionClimateSampler biomeSelectionSampler) {
-			biomeSelectionSampler.setBiomeSelectionSampler(null);
-		}
 		this.hasContext = false;
 		this.generatorContext = null;
 		this.preset = null;
-	}
-
-	private void configureBiomeSelectionSampler(Preset preset) {
-		if(!((Object) this.sampler instanceof BiomeSelectionClimateSampler climateSampler)) {
-			return;
-		}
-		if(this.generatorContext == null || !BiomeSelectionModifier.hasActiveUsage(preset.miscellaneous())) {
-			climateSampler.setBiomeSelectionSampler(null);
-			return;
-		}
-		climateSampler.setBiomeSelectionSampler(new BiomeSelectionSampler(
-			this.cellSampler(CellSampler.Field.MOUNTAIN),
-			this.cellSampler(CellSampler.Field.VOLCANO),
-			this.cellSampler(CellSampler.Field.MACRO_BIOME),
-			this.cellSampler(CellSampler.Field.TERRAIN_REGION),
-			this.cellSampler(CellSampler.Field.BIOME_REGION),
-			this.cellSampler(CellSampler.Field.HEIGHT)
-		));
-	}
-
-	private CellSampler cellSampler(CellSampler.Field field) {
-		return new CellSampler(() -> {
-			GeneratorContext context = this.generatorContext;
-			return context != null ? context.lookup : null;
-		}, field);
 	}
 }

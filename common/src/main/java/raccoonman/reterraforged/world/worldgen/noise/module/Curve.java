@@ -18,19 +18,6 @@ record Curve(Noise input, CurveFunction curveFunction) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		this.input.fill(batch, seed, output);
-		for(int index = 0; index < output.length; index++) {
-			output[index] = this.curveFunction.apply(output[index]);
-		}
-	}
-
-	@Override
 	public float minValue() {
 		return this.input.minValue();
 	}

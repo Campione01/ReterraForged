@@ -20,11 +20,6 @@ public record White(float frequency) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return true;
-	}
-
-	@Override
 	public float minValue() {
 		return 0.0F;
 	}

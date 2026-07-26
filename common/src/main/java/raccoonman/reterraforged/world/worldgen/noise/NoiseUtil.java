@@ -22,15 +22,6 @@ public class NoiseUtil {
     public static Vec2f cell(int seed, int x, int y) {
         return NoiseUtil.CELL_2D[hash2D(seed, x, y) & 0xFF];
     }
-
-    public static Vec2f cellPrimed(int seed, int xPrime, int yPrime) {
-        int hash = seed;
-        hash ^= xPrime;
-        hash ^= yPrime;
-        hash = hash * hash * hash * 60493;
-        hash ^= hash >> 13;
-        return NoiseUtil.CELL_2D[hash & 0xFF];
-    }
     
     public static float map(float value, float min, float max, float range) {
         float dif = clamp(value, min, max) - min;
@@ -206,31 +197,12 @@ public class NoiseUtil {
     }
     
     public static float gradCoord2D(int seed, int x, int y, float xd, float yd) {
-		return gradCoord2DPrimed(seed, X_PRIME * x, Y_PRIME * y, xd, yd);
-	}
-
-    public static float gradCoord2DPrimed(int seed, int xPrime, int yPrime, float xd, float yd) {
-		int hash = seed;
-		hash ^= xPrime;
-		hash ^= yPrime;
-		hash = hash * hash * hash * 60493;
-		hash ^= hash >> 13;
-		Vec2f g = GRAD_2D[hash & 0x7];
+        Vec2f g = coord2D(seed, x, y);
         return xd * g.x() + yd * g.y();
     }
     
     public static float gradCoord2D_24(int seed, int x, int y, float xd, float yd) {
-		return gradCoord2D24Primed(seed, X_PRIME * x, Y_PRIME * y, xd, yd);
-	}
-
-    public static float gradCoord2D24Primed(int seed, int xPrime, int yPrime, float xd, float yd) {
-		int hash = seed;
-		hash ^= xPrime;
-		hash ^= yPrime;
-		hash = hash * hash * hash * 60493;
-		hash ^= hash >> 13;
-		int selector24 = (int)((hash & 0x3FFFFF) * 1.3333334F) & 0x1F;
-		Vec2f g = GRAD_2D_24[selector24];
+        Vec2f g = coord2D_24(seed, x, y);
         return xd * g.x() + yd * g.y();
     }
     

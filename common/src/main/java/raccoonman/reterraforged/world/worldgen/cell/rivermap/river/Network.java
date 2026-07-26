@@ -36,7 +36,7 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
             network.carve(cell, x, z, nx, nz);
         }
     }
-
+    
     public boolean overlaps(River river, float extend) {
         return overlaps(river, this.riverCarver, extend) || overlaps(river, this.children, extend);
     }
@@ -128,7 +128,7 @@ public record Network(RiverCarver riverCarver, Lake[] lakes, Wetland[] wetlands,
         public Network build() {
             return this.build(this.recordBounds(Boundsf.builder()).build());
         }
-
+        
         private Network build(Boundsf bounds) {
             return new Network(this.carver, this.lakes.toArray(Lake[]::new), this.wetlands.toArray(Wetland[]::new), this.children.stream().map(child -> child.build(Boundsf.NONE)).toArray(Network[]::new), bounds);
         }

@@ -38,17 +38,17 @@ public class MixinNoiseChunk {
 		method = "cachedClimateSampler"
 	)
 	private void cachedClimateSampler(NoiseRouter noiseRouter, List<Climate.ParameterPoint> list, CallbackInfoReturnable<Climate.Sampler> callback) {
-		if((Object) callback.getReturnValue() instanceof TBClimateSampler cachedSampler && (Object) this.randomState.sampler() instanceof TBClimateSampler globalSampler) {
-			DensityFunction uniqueness = globalSampler.getUniqueness();
+    	if((Object) callback.getReturnValue() instanceof TBClimateSampler cachedSampler && (Object) this.randomState.sampler() instanceof TBClimateSampler globalSampler) {
+    		DensityFunction uniqueness = globalSampler.getUniqueness();
 
-			if(uniqueness != null) {
-				cachedSampler.setUniqueness(this.wrap(uniqueness));
-			}
-		}
-	}
+    		if(uniqueness != null) {
+    			cachedSampler.setUniqueness(this.wrap(uniqueness));
+    		}
+    	}
+    }
 
 	@Shadow
-	private DensityFunction wrap(DensityFunction densityFunction) {
+    private DensityFunction wrap(DensityFunction densityFunction) {
 		throw new IllegalStateException();
-	}
+    }
 }

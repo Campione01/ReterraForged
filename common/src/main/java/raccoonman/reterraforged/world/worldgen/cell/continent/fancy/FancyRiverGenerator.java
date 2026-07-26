@@ -37,20 +37,17 @@ public class FancyRiverGenerator extends BaseRiverGenerator<FancyContinentGenera
 		for (Island island : ((FancyContinentGenerator) this.continent).getSource().getIslands()) {
 			this.generateRoots(((FancyContinentGenerator) this.continent).getSource(), island, random, warp, roots);
 			for (Network.Builder river : roots) {
-				networks.add(this.buildNetwork(river));
+				networks.add(river.build());
 			}
 			roots.clear();
 		}
-		return this.createRivermap(x, z, networks.toArray(Network[]::new), warp);
+		return new Rivermap(x, z, networks.toArray(Network[]::new), warp);
 	}
 
 	private void generateRoots(FancyContinent continent, Island island, Random random, GenWarp warp, List<Network.Builder> roots) {
 		Segment[] segments = island.getSegments();
-		int lineCount = segmentLineCount(this.count, island.getId());
-		int endCount = endpointCount(this.count, island.getId());
-		if (lineCount == 0) {
-			return;
-		}
+		int lineCount = Math.max(1, 8 - island.getId());
+		int endCount = Math.max(4, 12 - island.getId());
 		for (int i = 0; i < segments.length; ++i) {
 			boolean end = i == 0 || i == segments.length - 1;
 			Segment segment = segments[i];
@@ -61,14 +58,6 @@ public class FancyRiverGenerator extends BaseRiverGenerator<FancyContinentGenera
 		this.collectPointRoots(continent, island, first.a, first.scaleA, endCount, random, warp, roots);
 		Segment last = segments[segments.length - 1];
 		this.collectPointRoots(continent, island, last.b, last.scaleB, endCount, random, warp, roots);
-	}
-
-	static int segmentLineCount(int configuredCount, int islandId) {
-		return configuredCount <= 0 ? 0 : Math.max(1, configuredCount - islandId);
-	}
-
-	static int endpointCount(int configuredCount, int islandId) {
-		return configuredCount <= 0 ? 0 : Math.max(4, configuredCount + 4 - islandId);
 	}
 
 	private void collectSegmentRoots(FancyContinent continent, Island island, Segment segment, int count, Random random, GenWarp warp, List<Network.Builder> roots) {

@@ -18,26 +18,6 @@ record Alpha(Noise input, Noise alpha) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input.supportsBulk() && this.alpha.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		this.input.fill(batch, seed, output);
-		float[] alphaValues = batch.acquire();
-		try {
-			this.alpha.fill(batch, seed, alphaValues);
-			for(int index = 0; index < output.length; index++) {
-				float alpha = alphaValues[index];
-				output[index] = output[index] * alpha + (1.0F - alpha);
-			}
-		} finally {
-			batch.release(alphaValues);
-		}
-	}
-
-	@Override
 	public float minValue() {
 		return this.input.minValue();
 	}

@@ -24,7 +24,6 @@ import net.minecraft.resources.RegistryDataLoader;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.data.worldgen.preset.PresetConfiguredFeatures;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
-import raccoonman.reterraforged.data.worldgen.tags.RTFBiomeTagsProvider;
 import raccoonman.reterraforged.data.worldgen.tags.RTFBlockTagsProvider;
 import raccoonman.reterraforged.data.worldgen.tags.RTFDensityFunctionTagsProvider;
 import raccoonman.reterraforged.platform.DataGenUtil;
@@ -72,9 +71,6 @@ public class Datapacks {
 		});
 		packGenerator.addProvider((output) -> {
 			return new RTFDensityFunctionTagsProvider(output, lookup);
-		});
-		packGenerator.addProvider((output) -> {
-			return new RTFBiomeTagsProvider(output, lookup);
 		});
 		packGenerator.addProvider((output) -> {
 			return new RTFBlockTagsProvider(preset, output, lookup);

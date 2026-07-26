@@ -5,7 +5,6 @@ import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.IntSupplier;
 
 import com.google.common.collect.ImmutableList;
 
@@ -97,28 +96,11 @@ final class PresetWidgets {
 	
 	@SuppressWarnings("unchecked")
 	public static ValueButton<Integer> createRandomButton(String text, int initial, Consumer<Integer> onPress) {
-		return createRandomButton(text, initial, onPress, () -> ThreadLocalRandom.current().nextInt());
-	}
-
-	public static ValueButton<Integer> createNonNegativeRandomButton(String text, int initial, Consumer<Integer> onPress) {
-		return createNonNegativeRandomButton(text, initial, onPress, () -> ThreadLocalRandom.current().nextInt());
-	}
-
-	static ValueButton<Integer> createNonNegativeRandomButton(String text, int initial, Consumer<Integer> onPress, IntSupplier random) {
-		return createRandomButton(text, initial, onPress, () -> toNonNegative(random.getAsInt()));
-	}
-
-	@SuppressWarnings("unchecked")
-	private static ValueButton<Integer> createRandomButton(String text, int initial, Consumer<Integer> onPress, IntSupplier random) {
 		return createValueButton(text, (button) -> {
 			if(button instanceof ValueButton valueButton) {
-				valueButton.setValue(random.getAsInt());
+				valueButton.setValue(ThreadLocalRandom.current().nextInt());
 				onPress.accept((Integer) valueButton.getValue());
 			}
 		}, initial);
-	}
-
-	static int toNonNegative(int value) {
-		return value & Integer.MAX_VALUE;
 	}
 }

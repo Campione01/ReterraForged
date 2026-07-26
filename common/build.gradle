@@ -10,10 +10,6 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
     modImplementation "com.github.glitchfiend:TerraBlender-neoforge:${rootProject.minecraft_version}-${rootProject.terrablender_version}"
 	compileOnly "com.electronwill.night-config:toml:3.6.7"
-	compileOnly "org.lwjgl:lwjgl-opencl:3.3.3"
-	testImplementation "org.junit.jupiter:junit-jupiter:5.11.4"
-	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
-	testRuntimeOnly "org.lwjgl:lwjgl-opencl:3.3.3"
 	//compileOnly "lithostitched-forge:1.0.0"
 }
 
@@ -23,24 +19,4 @@ repositories {
 
 remapJar {
     archiveClassifier.set("${rootProject.minecraft_version}")
-}
-
-test {
-	useJUnitPlatform()
-}
-
-processResources {
-	from(rootProject.file("native/binaries")) {
-		into "META-INF/reterraforged/natives"
-	}
-	from(rootProject.file("native/licenses")) {
-		into "META-INF/reterraforged/licenses"
-	}
-	from(rootProject.file("THIRD_PARTY_NOTICES.md")) {
-		into "META-INF"
-	}
-	from(rootProject.file("LICENSE")) {
-		into "META-INF"
-		rename { "RETERRAFORGED_LICENSE" }
-	}
 }

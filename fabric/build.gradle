@@ -35,8 +35,6 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${rootProject.fabric_loader_version}"
     modApi("net.fabricmc.fabric-api:fabric-api:${rootProject.fabric_api_version}") { exclude group: 'net.fabricmc', module: 'fabric-loader' }
 // 	modImplementation("com.github.glitchfiend:TerraBlender-fabric:${rootProject.minecraft_version}-${rootProject.terrablender_version}")
-    implementation("org.lwjgl:lwjgl-opencl:3.3.3") { transitive false }
-    include("org.lwjgl:lwjgl-opencl:3.3.3") { transitive false }
     
     common(project(path: ":common", configuration: "namedElements")) { transitive false }
     shadowCommon(project(path: ":common", configuration: "transformProductionFabric")) { transitive false }
@@ -62,8 +60,6 @@ processResources {
 
 shadowJar {
     exclude "architectury.common.json"
-    exclude "module-info.class"
-    exclude "META-INF/versions/**/module-info.class"
 
     configurations = [project.configurations.shadowCommon]
     archiveClassifier.set("dev-shadow")

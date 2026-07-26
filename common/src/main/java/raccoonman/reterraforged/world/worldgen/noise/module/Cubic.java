@@ -36,11 +36,6 @@ public record Cubic(float frequency, int octaves, float lacunarity, float gain, 
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return true;
-	}
-
-	@Override
 	public Noise mapAll(Visitor visitor) {
 		return visitor.apply(this);
 	}

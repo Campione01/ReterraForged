@@ -35,7 +35,6 @@ public class FakeWaterBiomeSettingsPage extends PresetEditorPage {
 		
 		this.enableFakeWaterBiomes = PresetWidgets.createToggle(fakeWaterBiomes.enableFakeWaterBiomes, RTFTranslationKeys.GUI_BUTTON_ENABLE_FAKE_WATER_BIOMES, (button, value) -> {
 			fakeWaterBiomes.enableFakeWaterBiomes = value;
-			this.updateDependentControls(value);
 			this.regenerate();
 		});
 		this.steppeBelowSeaLevelRiverBiomes = PresetWidgets.createToggle(fakeWaterBiomes.steppeBelowSeaLevelRiverBiomes, RTFTranslationKeys.GUI_BUTTON_STEPPE_FAKE_RIVERS, (button, value) -> {
@@ -57,14 +56,6 @@ public class FakeWaterBiomeSettingsPage extends PresetEditorPage {
 		this.left.addWidget(this.steppeBelowSeaLevelRiverBiomes);
 		this.left.addWidget(this.badlandsBelowSeaLevelOceanBiomes);
 		this.left.addWidget(this.heightOffset);
-
-		this.updateDependentControls(fakeWaterBiomes.enableFakeWaterBiomes);
-	}
-
-	private void updateDependentControls(boolean active) {
-		this.steppeBelowSeaLevelRiverBiomes.active = active;
-		this.badlandsBelowSeaLevelOceanBiomes.active = active;
-		this.heightOffset.active = active;
 	}
 
 	@Override

@@ -15,12 +15,11 @@ import net.minecraft.client.MouseHandler;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.CycleButton;
-import net.minecraft.client.gui.narration.NarrationElementOutput;
 import net.minecraft.client.gui.screens.worldselection.WorldCreationContext;
 import net.minecraft.client.renderer.texture.DynamicTexture;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderGetter;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.RegistryAccess;
@@ -31,9 +30,12 @@ import raccoonman.reterraforged.RTFCommon;
 import raccoonman.reterraforged.client.data.RTFTranslationKeys;
 import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
+import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
+import raccoonman.reterraforged.concurrent.cache.CacheManager;
 import raccoonman.reterraforged.config.PerformanceConfig;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
+import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
@@ -42,8 +44,10 @@ import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
+import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 
 public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, AbstractWidget, AbstractWidget> {
+	private Slider zoom;
 	private CycleButton<RenderMode> renderMode;
 	private ValueButton<Integer> seed;
 	private Preview preview;
@@ -56,25 +60,31 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	}
 	
 	protected void regenerate() {
-		this.preview.requestRegeneration(true, this.applyOptionalPreviewFilters());
-	}
-
-	protected boolean applyOptionalPreviewFilters() {
-		return false;
+		this.preview.regenerate();
 	}
 	
 	@Override
 	public void init() {
 		super.init();
 
-		this.preview = this.screen.acquirePreview(this, this.preset);
-		this.renderMode = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.preview.renderMode(), Optional.empty(), (button, value) -> {
-			this.preview.setRenderMode(value);
+		if(this.preview != null) {
+			try {
+				this.preview.close();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+
+		this.renderMode = PresetWidgets.createCycle(ImmutableList.copyOf(RenderMode.values()), this.renderMode != null ? this.renderMode.getValue() : RenderMode.BIOME_TYPE, Optional.empty(), (button, value) -> {
+			this.regenerate();
 		}, RenderMode::name);
 		this.seed = PresetWidgets.createRandomButton(RTFTranslationKeys.GUI_BUTTON_SEED, (int) this.screen.getSettings().options().seed(), (i) -> {
 			this.screen.setSeed(i);
 			this.regenerate();
 		});
+
+		this.preview = new Preview();
+		this.preview.regenerate();
 
 		this.right.addWidget(this.renderMode);
 		this.right.addWidget(this.seed);
@@ -87,10 +97,10 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	
 		try {
 			this.preset.save();
+			this.preview.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		this.screen.detachPreview(this);
 	}
 	
 	@Override
@@ -103,27 +113,15 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 			e.printStackTrace();
 		}
 	}
-
-	static boolean requiresOptionalPreviewFilterRefresh(boolean current, PresetEditorPage owner) {
-		return current != owner.applyOptionalPreviewFilters();
-	}
-
-	public static final class Preview extends AbstractWidget {
+	
+	public class Preview extends AbstractWidget {
 	    private static final int FACTOR = 4;
 	    public static final int SIZE = (1 << 4) << FACTOR;
 	    private static final float[] LEGEND_SCALES = { 1, 0.9F, 0.75F, 0.6F };
-	    private final PresetConfigScreen screen;
-	    private final PresetEntry preset;
 	    private DynamicTexture texture = new DynamicTexture(new NativeImage(SIZE, SIZE, false));
 	    private ResourceLocation textureId = Minecraft.getInstance().getTextureManager().register(RTFCommon.MOD_ID + "-preview-framebuffer", this.texture); 
 	    private Tile tile;
-	    private GeneratorContext generatorContext;
-	    private Levels levels;
-	    private BlockPos spawnCenter = BlockPos.ZERO;
 	    private int centerX, centerZ;
-	    private boolean applyOptionalFilters;
-	    private boolean closed;
-	    private RenderMode renderMode = RenderMode.BIOME_TYPE;
 	    
 	    private String hoveredCoords = "";
 	    //TODO maybe make this a map or something instead?
@@ -135,139 +133,60 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	    private int clickOffsetX, clickOffsetZ;
 	    private int zoomValue = 68; // default zoom value
 	
-	    Preview(PresetConfigScreen screen, PresetEntry preset) {
+	    public Preview() {
 	        super(-1, -1, -1, -1, CommonComponents.EMPTY);
-	        this.screen = screen;
-	        this.preset = preset;
-	        this.requestRegeneration(true, false);
 	    }
 
-	    void attach(PresetEditorPage owner) {
-			this.resetInputState();
-			if(requiresOptionalPreviewFilterRefresh(this.applyOptionalFilters, owner)) {
-				this.applyOptionalFilters = owner.applyOptionalPreviewFilters();
-				this.requestRegeneration(false, this.applyOptionalFilters);
-			}
-	    }
-
-	    void detach(PresetEditorPage owner) {
-			this.resetInputState();
-			if(this.screen.getFocused() == this) {
-				this.screen.setFocused(null);
-			}
-	    }
-
-	    RenderMode renderMode() {
-			return this.renderMode;
-	    }
-
-	    void setRenderMode(RenderMode renderMode) {
-			this.renderMode = renderMode;
-			this.recolor();
-	    }
-
-		public void requestRegeneration(boolean rebuildContext) {
-			this.requestRegeneration(rebuildContext, this.applyOptionalFilters);
-		}
-
-		void requestRegeneration(boolean rebuildContext, boolean applyOptionalFilters) {
-			if(this.closed) {
-				return;
-			}
-			boolean replacingContext = rebuildContext || this.generatorContext == null;
-			GeneratorContext nextContext = this.generatorContext;
-			Tile nextTile = null;
-			try {
-				if(replacingContext) {
-					WorldCreationContext settings = this.screen.getSettings();
-					RegistryAccess.Frozen registries = settings.worldgenLoadContext();
-					Preset presetSnapshot = this.preset.getPreset().copy();
-					nextContext = this.createGeneratorContext(presetSnapshot, registries, (int)settings.options().seed());
-				}
-				BlockPos nextSpawnCenter = replacingContext
-					? nextContext.preset.world().properties.spawnType.getSearchCenter(nextContext)
-					: this.spawnCenter;
-				int nextCenterX = nextSpawnCenter.getX() + this.offsetX;
-				int nextCenterZ = nextSpawnCenter.getZ() + this.offsetZ;
-				nextTile = nextContext.generator.generateZoomed(nextCenterX, nextCenterZ, this.getZoom(), applyOptionalFilters).join();
-
-				Tile previousTile = this.tile;
-				GeneratorContext previousContext = this.generatorContext;
-				this.generatorContext = nextContext;
-				this.tile = nextTile;
-				this.spawnCenter = nextSpawnCenter;
-				this.centerX = nextCenterX;
-				this.centerZ = nextCenterZ;
-				this.applyOptionalFilters = applyOptionalFilters;
-				WorldSettings.Properties properties = nextContext.preset.world().properties;
-				this.levels = new Levels(properties.terrainScaler(), properties.seaLevel);
-				nextTile = null;
-				if(previousTile != null) {
-					previousTile.close();
-				}
-				if(replacingContext && previousContext != null) {
-					previousContext.close();
-				}
-				this.recolor();
-			} catch(RuntimeException exception) {
-				if(nextTile != null) {
-					nextTile.close();
-				}
-				if(replacingContext && nextContext != null && nextContext != this.generatorContext) {
-					nextContext.close();
-				}
-				RTFCommon.LOGGER.error("Failed to generate the terrain preview", exception);
-			}
-		}
-
-		private GeneratorContext createGeneratorContext(Preset presetSnapshot, RegistryAccess.Frozen registries, int seed) {
-	        HolderLookup.Provider provider = presetSnapshot.buildPatch(registries);
+	    public void regenerate() {
+			WorldCreationContext settings = PresetEditorPage.this.screen.getSettings();
+	        RegistryAccess.Frozen registries = settings.worldgenLoadContext();
+	        HolderLookup.Provider provider = PresetEditorPage.this.preset.getPreset().buildPatch(registries);
 	        HolderGetter<Preset> presets = provider.lookupOrThrow(RTFRegistries.PRESET);
 	        HolderGetter<Noise> noises = provider.lookupOrThrow(RTFRegistries.NOISE);
 	        Preset preset = presets.getOrThrow(Preset.KEY).value();
-			PerformanceConfig performance = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
+	        WorldSettings world = preset.world();
+	        WorldSettings.Properties properties = world.properties;
+	        
+	        try {
+				CacheManager.clear();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
 				.resultOrPartial(RTFCommon.LOGGER::error)
 				.orElseGet(PerformanceConfig::makeDefault);
-			return GeneratorContext.makeUncached(preset, noises, seed, FACTOR, 0, performance.batchCount());
-	    }
+	        GeneratorContext generatorContext = GeneratorContext.makeUncached(preset, noises, (int) settings.options().seed(), FACTOR, 0, config.batchCount());
+	        
+	        // Ignore continent center snapping, use offset directly
+	        this.centerX = this.offsetX;
+	        this.centerZ = this.offsetZ;
 
-		private void recolor() {
-			if(this.tile == null || this.levels == null || this.closed) {
-				return;
-			}
+	        this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
+	        RenderMode renderMode = PresetEditorPage.this.renderMode.getValue();
+	        Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
+
 	        int stroke = 2;
 	        int width = this.tile.getBlockSize().size();
+
 	        NativeImage pixels = this.texture.getPixels();
 	        this.tile.iterate((cell, x, z) -> {
 	            if (x < stroke || z < stroke || x >= width - stroke || z >= width - stroke) {
 	                pixels.setPixelRGBA(x, z, Color.BLACK.getRGB());
 	            } else {
-	                pixels.setPixelRGBA(x, z, this.renderMode.getColor(cell, this.levels));
+	                pixels.setPixelRGBA(x, z, renderMode.getColor(cell, levels));
 	            }
 	        });
 	        this.texture.upload();
 	    }
 	    
-		public void close() {
-			if(this.closed) {
-				return;
-			}
-			this.closed = true;
-			if(this.tile != null) {
-				this.tile.close();
-				this.tile = null;
-			}
-			if(this.generatorContext != null) {
-				this.generatorContext.close();
-				this.generatorContext = null;
-			}
-			Minecraft.getInstance().getTextureManager().release(this.textureId);
-		}
-
-		private void resetInputState() {
-			this.clicked = false;
-			this.hoveredCoords = "";
-		}
+	    public void close() throws Exception {
+	    	this.texture.close();
+	    	try {
+	   CacheManager.clear();
+	  } catch (Exception e) {
+	   e.printStackTrace();
+	  }
+	    }
 	
 	    @Override
 	    public void updateWidgetNarration(NarrationElementOutput narrationElementOutput) {
@@ -285,10 +204,9 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
 	        guiGraphics.blit(this.textureId, x, y, 0, 0, this.width, this.height, this.width, this.height);
 
-	        if(this.tile != null) {
-	            this.updateLegend(mx, my);
-	            this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width, 10, 0xFFFFFF);
-	        }
+	        this.updateLegend(mx, my);
+
+	        this.renderLegend(guiGraphics, mx, my, this.legendLabels, this.legendValues, x, y + this.width, 10, 0xFFFFFF);
 	    }
 	
 	    @Override
@@ -307,12 +225,8 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        double blocksPerPixel = zoom; // preview size = 256
 	        offsetX -= dragX * blocksPerPixel;
 	        offsetZ -= dragY * blocksPerPixel;
-	        this.requestRegeneration(false);
+	        regenerate();
 	    }
-
-		public boolean isDraggingPreview() {
-			return this.clicked;
-		}
 	
 	    @Override
 	    public void onRelease(double mouseX, double mouseY) {
@@ -325,14 +239,13 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        int dragDeltaX = offsetX - clickOffsetX;
 	        int dragDeltaZ = offsetZ - clickOffsetZ;
 	        if (Math.abs(dragDeltaX) <= 4 && Math.abs(dragDeltaZ) <= 4) {
-	            offsetX = clickOffsetX;
-	            offsetZ = clickOffsetZ;
 	            // Treat as click: copy coordinates if hoveredCoords is not empty
 	            if (updateLegend((int) mouseX, (int) mouseY) && !hoveredCoords.isEmpty()) {
 	                playDownSound(Minecraft.getInstance().getSoundManager());
-	                this.screen.minecraft.keyboardHandler.setClipboard(hoveredCoords);
+	                PresetEditorPage.this.screen.minecraft.keyboardHandler.setClipboard(hoveredCoords);
 	            }
 	        }
+	        // Otherwise, drag already applied in onDrag, nothing more to do
 	    }
 	@Override
 	public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
@@ -346,7 +259,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        int dynamicStep = Math.max(1, (100 - zoomValue) / 10);
 	        int step = (int) Math.signum(scrollY) * dynamicStep;
 	        zoomValue = Math.max(1, Math.min(100, zoomValue + step));
-	        this.requestRegeneration(false);
+	        regenerate();
 	        return true;
 	    }
 	    return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
@@ -355,7 +268,14 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	
 	    @Override
 	    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-	        return super.mouseClicked(mouseX, mouseY, button);
+	        boolean over = isMouseOver(mouseX, mouseY);
+	        if (over && button == 0) {
+	            // Ensure onClick is called even if super.mouseClicked doesn't call it
+	            onClick(mouseX, mouseY);
+	        }
+	        boolean result = super.mouseClicked(mouseX, mouseY, button);
+	        // Always return true if mouse is over to indicate event handled
+	        return over || result;
 	    }
 	
 	    @Override
@@ -395,7 +315,7 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	    }
 
 	    private float getLegendScale() {
-	        int index = this.screen.minecraft.options.guiScale().get() - 1;
+	        int index = PresetEditorPage.this.screen.minecraft.options.guiScale().get() - 1;
 	        if (index < 0 || index >= LEGEND_SCALES.length) {
 	            // index=-1 == GuiScale(AUTO) which is the same as GuiScale(4)
 	            // values above 4 don't exist but who knows what mods might try set it to

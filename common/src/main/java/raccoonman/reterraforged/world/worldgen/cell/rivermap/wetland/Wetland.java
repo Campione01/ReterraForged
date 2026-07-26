@@ -47,16 +47,15 @@ public class Wetland {
     }
     
     public void apply(Cell cell, float x, float z, float rx, float rz) {
+        float heightFade = RiverTerrainFade.heightFade(cell.height, this.fadeStartHeight, this.fadeEndHeight);
+        float valleyFade = RiverTerrainFade.valleyFade(cell, heightFade);
+        float poolsFade = RiverTerrainFade.bedFade(cell, heightFade);
+
         float dist2 = distToLineSq(x, z, this.a.x(), this.a.y(), this.b.x(), this.b.y());
+        
         if (dist2 > this.radius2) {
             return;
         }
-        float heightFade = RiverTerrainFade.heightFade(cell.height, this.fadeStartHeight, this.fadeEndHeight);
-		boolean mountain = RiverTerrainFade.isMountain(cell);
-		float mountainFade = RiverTerrainFade.mountainFade(cell, mountain);
-        float valleyFade = RiverTerrainFade.valleyFade(heightFade, mountainFade);
-        float poolsFade = RiverTerrainFade.bedFade(heightFade, mountainFade);
-
         float dist = (float)Math.sqrt(dist2);
         float valleyAlpha = 1.0F - dist / this.radius;
         valleyAlpha *= valleyFade;
@@ -68,7 +67,7 @@ public class Wetland {
         float bankHeight = this.banks;
         float bedHeight = this.bed;
 
-        if (mountain) {
+        if (RiverTerrainFade.isMountain(cell)) {
             float wetlandThreshold = this.banks + (2.0F / 1184.0F); 
             
             if (cell.height > wetlandThreshold) {
@@ -87,7 +86,7 @@ public class Wetland {
             }
         }
         
-        float rawShape = this.moundShape.computeRoot(x, z, 0);
+        float rawShape = this.moundShape.compute(x, z, 0);
         float shapeVal = NoiseUtil.clamp(rawShape, 0.0F, 1.0F);
         
         float poolsAlpha = valleyAlpha * shapeVal * poolsFade;
@@ -100,7 +99,7 @@ public class Wetland {
             cell.erosionMask = true;
         }
         
-        float edgeVal = NoiseUtil.clamp(this.terrainEdge.computeRoot(x, z, 0), 0.2F, 0.8F);
+        float edgeVal = NoiseUtil.clamp(this.terrainEdge.compute(x, z, 0), 0.2F, 0.8F);
         if (dist > 0.65F && poolsAlpha > edgeVal) {
             cell.terrain = TerrainType.WETLAND;
         }
@@ -108,7 +107,7 @@ public class Wetland {
         if (cell.height >= bedHeight && cell.height < this.moundMax) {
             float shapeAlpha = shapeVal * poolsAlpha;
             
-            float rawHeight = this.moundHeight.computeRoot(x, z, 0);
+            float rawHeight = this.moundHeight.compute(x, z, 0);
             float heightVal = NoiseUtil.clamp(rawHeight, 0.0F, 1.0F);
             
             float mounds = this.moundMin + heightVal * this.moundVariance;

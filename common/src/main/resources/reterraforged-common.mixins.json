@@ -17,8 +17,6 @@
 		"MixinRegistrySetBuilder$EmptyTagLookup",
 		"MixinSpawnFinder",
 		"MixinClimateSampler",
-		"MixinClimateParameterList",
-		"MixinMultiNoiseBiomeSource",
 		"terrablender.MixinParameterList",
 		"terrablender.MixinClimateSampler",
 		"terrablender.MixinTargetPoint",

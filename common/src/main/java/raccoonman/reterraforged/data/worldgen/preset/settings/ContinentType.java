@@ -1,9 +1,6 @@
 package raccoonman.reterraforged.data.worldgen.preset.settings;
 
-import java.util.Locale;
-
 import com.mojang.serialization.Codec;
-import com.mojang.serialization.DataResult;
 
 import net.minecraft.util.StringRepresentable;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
@@ -52,25 +49,12 @@ public enum ContinentType implements StringRepresentable {
         }
     };
 	
-	public static final Codec<ContinentType> CODEC = Codec.STRING.comapFlatMap(ContinentType::decode, ContinentType::getSerializedName);
+	public static final Codec<ContinentType> CODEC = StringRepresentable.fromEnum(ContinentType::values);
     
     public abstract Continent create(Seed seed, GeneratorContext context);
 
     @Override
 	public String getSerializedName() {
 		return this.name();
-	}
-
-	private static DataResult<ContinentType> decode(String name) {
-		String normalized = name.toUpperCase(Locale.ROOT);
-		if(normalized.equals("UPLIFT")) {
-			return DataResult.success(MULTI_IMPROVED);
-		}
-		for(ContinentType type : values()) {
-			if(type.getSerializedName().equals(normalized)) {
-				return DataResult.success(type);
-			}
-		}
-		return DataResult.error(() -> "Unknown element name:" + name);
 	}
 }

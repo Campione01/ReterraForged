@@ -44,27 +44,6 @@ record PowerCurve(Noise input, float power, float mid, float min, float max) imp
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		this.input.fill(batch, seed, output);
-		for(int index = 0; index < output.length; index++) {
-			float input = output[index];
-			if(input >= this.mid) {
-				float part = input - this.mid;
-				input = this.mid + NoiseUtil.pow(part, this.power);
-			} else {
-				float part = this.mid - input;
-				input = this.mid - NoiseUtil.pow(part, this.power);
-			}
-			output[index] = NoiseUtil.map(input, this.min, this.max, this.max - this.min);
-		}
-	}
-
-	@Override
 	public Noise mapAll(Visitor visitor) {
 		return new PowerCurve(this.input.mapAll(visitor), this.power);
 	}

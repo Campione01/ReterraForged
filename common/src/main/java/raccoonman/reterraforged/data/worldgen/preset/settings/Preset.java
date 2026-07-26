@@ -1,7 +1,5 @@
 package raccoonman.reterraforged.data.worldgen.preset.settings;
 
-import java.util.Map;
-
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 
@@ -15,7 +13,6 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.data.worldgen.BootstrapContext;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.RegistryDataLoader;
-import net.minecraft.world.level.levelgen.structure.StructureSet;
 import raccoonman.reterraforged.data.worldgen.compat.terrablender.TBNoiseRouterData;
 import raccoonman.reterraforged.data.worldgen.preset.PresetBiomeData;
 import raccoonman.reterraforged.data.worldgen.preset.PresetBiomeModifierData;
@@ -26,7 +23,6 @@ import raccoonman.reterraforged.data.worldgen.preset.PresetNoiseData;
 import raccoonman.reterraforged.data.worldgen.preset.PresetNoiseGeneratorSettings;
 import raccoonman.reterraforged.data.worldgen.preset.PresetNoiseRouterData;
 import raccoonman.reterraforged.data.worldgen.preset.PresetPlacedFeatures;
-import raccoonman.reterraforged.data.worldgen.preset.PresetStructureSetData;
 import raccoonman.reterraforged.data.worldgen.preset.PresetStructureRuleData;
 import raccoonman.reterraforged.registries.RTFRegistries;
 import raccoonman.reterraforged.world.worldgen.biome.modifier.BiomeModifier;
@@ -58,15 +54,6 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 	@SuppressWarnings("unchecked")
 	public HolderLookup.Provider buildPatch(RegistryAccess registries) {
 		RegistrySetBuilder builder = new RegistrySetBuilder();
-		if(!this.structures.entries.isEmpty()) {
-			Map<ResourceKey<StructureSet>, StructureSet> structureSetPatches = PresetStructureSetData.buildPatches(
-				this.structures,
-				registries.lookupOrThrow(Registries.STRUCTURE_SET)
-			);
-			if(!structureSetPatches.isEmpty()) {
-				this.addPatch(builder, Registries.STRUCTURE_SET, (preset, ctx) -> PresetStructureSetData.bootstrap(structureSetPatches, ctx));
-			}
-		}
 		this.addPatch(builder, RTFRegistries.PRESET, (preset, ctx) -> ctx.register(KEY, preset));
 		this.addPatch(builder, RTFRegistries.NOISE, PresetNoiseData::bootstrap);
 		this.addPatch(builder, RTFRegistries.BIOME_MODIFIER, PresetBiomeModifierData::bootstrap);

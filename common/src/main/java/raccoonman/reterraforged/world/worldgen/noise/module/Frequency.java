@@ -19,29 +19,6 @@ record Frequency(Noise input, Noise xFreq, Noise zFreq) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input.supportsBulk() && this.xFreq.supportsBulk() && this.zFreq.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		float[] xCoordinates = batch.acquire();
-		float[] zCoordinates = batch.acquire();
-		try {
-			this.xFreq.fill(batch, seed, xCoordinates);
-			this.zFreq.fill(batch, seed, zCoordinates);
-			for(int index = 0; index < output.length; index++) {
-				xCoordinates[index] = batch.xAt(index) * xCoordinates[index];
-				zCoordinates[index] = batch.zAt(index) * zCoordinates[index];
-			}
-			this.input.fill(batch.transformed(xCoordinates, zCoordinates), seed, output);
-		} finally {
-			batch.release(zCoordinates);
-			batch.release(xCoordinates);
-		}
-	}
-
-	@Override
 	public float minValue() {
 		return this.input.minValue();
 	}

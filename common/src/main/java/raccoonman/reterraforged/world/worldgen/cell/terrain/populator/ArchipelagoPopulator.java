@@ -74,8 +74,8 @@ public class ArchipelagoPopulator implements CellPopulator {
 
 	@Override
 	public void apply(Cell cell, float x, float z) {
-		float sizeValue = this.sizeNoise.computeRoot(x, z, 0);
-		float densityValue = this.densityNoise.computeRoot(x, z, 0);
+		float sizeValue = this.sizeNoise.compute(x, z, 0);
+		float densityValue = this.densityNoise.compute(x, z, 0);
 		float densityThreshold = NoiseUtil.clamp(1.0F - this.settings.islandDensity * 0.8F, 0.05F, 0.98F);
 		
 		float shapeAlpha = smoothStep(0.5F, 1.0F, sizeValue);
@@ -105,9 +105,9 @@ public class ArchipelagoPopulator implements CellPopulator {
 		float mountainAlpha = smoothStep(mountainStart, mountainEnd, islandAlpha);
 		float mountainGate = chanceMask(this.mountainSelector, this.settings.mountainChance, x, z);
 		float volcanoGate = chanceMask(this.volcanoSelector, this.settings.volcanoChance, x, z);
-		float hillValue = this.hillHeight.computeRoot(x, z, 0) * (0.15F + mountainGate * 0.55F);
-		float ridgeValue = this.ridgeHeight.computeRoot(x, z, 0) * mountainGate;
-		float volcanoValue = this.volcanoHeight.computeRoot(x, z, 0) * volcanoGate;
+		float hillValue = this.hillHeight.compute(x, z, 0) * (0.15F + mountainGate * 0.55F);
+		float ridgeValue = this.ridgeHeight.compute(x, z, 0) * mountainGate;
+		float volcanoValue = this.volcanoHeight.compute(x, z, 0) * volcanoGate;
 		float mountainValue = NoiseUtil.clamp(hillValue * 0.35F + ridgeValue * 0.5F + volcanoValue * 0.75F, 0.0F, 1.0F);
 		
 		float baseHeight = this.settings.islandHeight * (0.015F + this.settings.islandBaseScale * 0.08F);
@@ -129,11 +129,11 @@ public class ArchipelagoPopulator implements CellPopulator {
 		
 		if (islandAlpha >= shelfEnd) {
 			if (cell.terrain == TerrainType.ISLAND_BEACH) {
-				cell.erosion = this.beachErosion.computeRoot(x, z, 0);
-				cell.weirdness = this.beachWeirdness.computeRoot(x, z, 0);
+				cell.erosion = this.beachErosion.compute(x, z, 0);
+				cell.weirdness = this.beachWeirdness.compute(x, z, 0);
 			} else {
-				cell.erosion = this.islandErosion.computeRoot(x, z, 0);
-				cell.weirdness = this.islandWeirdness.computeRoot(x, z, 0);
+				cell.erosion = this.islandErosion.compute(x, z, 0);
+				cell.weirdness = this.islandWeirdness.compute(x, z, 0);
 			}
 		}
 	}
@@ -160,7 +160,7 @@ public class ArchipelagoPopulator implements CellPopulator {
 			return 1.0F;
 		}
 		float threshold = 1.0F - chance;
-		return smoothStep(threshold, Math.min(1.0F, threshold + 0.2F), selector.computeRoot(x, z, 0));
+		return smoothStep(threshold, Math.min(1.0F, threshold + 0.2F), selector.compute(x, z, 0));
 	}
 	
 	private static float smoothStep(float min, float max, float value) {

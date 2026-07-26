@@ -20,8 +20,6 @@ import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 import raccoonman.reterraforged.world.worldgen.util.Variance;
 
 public abstract class BaseRiverGenerator<T extends Continent> implements RiverGenerator {
-    private static final Variance LEGACY_ADDITIONAL_LAKE_DISTANCE = Variance.of(0.6000000238418579F, 0.30000001192092896F);
-
     protected int count;
     protected int continentScale;
     protected float minEdgeValue;
@@ -58,15 +56,7 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
         for (Network.Builder river : rivers) {
             this.generateWetlands(river, random);
         }
-        Network[] networks = rivers.stream().map(this::buildNetwork).toArray(Network[]::new);
-        return this.createRivermap(x, z, networks, warp);
-    }
-
-    protected Network buildNetwork(Network.Builder builder) {
-        return builder.build();
-    }
-
-    protected Rivermap createRivermap(int x, int z, Network[] networks, GenWarp warp) {
+        Network[] networks = rivers.stream().map(Network.Builder::build).toArray(Network[]::new);
         return new Rivermap(x, z, networks, warp);
     }
     
@@ -122,10 +112,17 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     public void generateAdditionalLakes(int x, int z, Random random, List<Network.Builder> roots, List<RiverCarver> rivers, List<Lake> lakes) {
         float size = 150.0f;
         Variance sizeVariance = Variance.of(1.0F, 0.25F);
+        Variance distanceVariance = Variance.of(0.6000000238418579F, 0.30000001192092896F);
         for (int i = 1; i < roots.size(); ++i) {
             Network.Builder a = roots.get(i - 1);
-            Vec2f center = sampleAdditionalLakeCenter(x, z, a.carver.river, this.lake, random);
+            float angle = 0.0F;
+            float dx = NoiseUtil.sin(angle);
+            float dz = NoiseUtil.cos(angle);
+            float distance = distanceVariance.next(random);
+            float lx = x + dx * a.carver.river.length * distance;
+            float lz = z + dz * a.carver.river.length * distance;
             float variance = sizeVariance.next(random);
+            Vec2f center = new Vec2f(lx, lz);
             if (!this.lakeOverlaps(center, size, rivers)) {
                 lakes.add(new Lake(center, size, variance, this.lake));
             }
@@ -133,7 +130,8 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     }
     
     public void generateWetlands(Network.Builder builder, Random random) {
-        if (this.wetland.shouldGenerate(random)) {
+        int skip = random.nextInt(this.wetland.skipSize);
+        if (skip == 0) {
             float width = this.wetland.width.next(random);
             float length = this.wetland.length.next(random);
             float riverLength = builder.carver.river.length();
@@ -155,39 +153,13 @@ public abstract class BaseRiverGenerator<T extends Continent> implements RiverGe
     public void addLake(Network.Builder branch, Random random, GenWarp warp) {
         if (random.nextFloat() <= this.lake.chance) {
             float lakeSize = this.lake.sizeMin + random.nextFloat() * this.lake.sizeRange;
-            Vec2f center = sampleBranchLakeCenter(branch.carver.river, this.lake, random);
-            if (this.lakeOverlapsOther(center.x(), center.y(), lakeSize, branch.lakes)) {
+            float cx = branch.carver.river.x1;
+            float cz = branch.carver.river.z1;
+            if (this.lakeOverlapsOther(cx, cz, lakeSize, branch.lakes)) {
                 return;
             }
-            branch.lakes.add(new Lake(center, lakeSize, 1.0f, this.lake));
+            branch.lakes.add(new Lake(new Vec2f(cx, cz), lakeSize, 1.0f, this.lake));
         }
-    }
-
-    static Vec2f sampleLakeCenter(River river, LakeConfig lake, Random random) {
-        long position = river.pos(lake.nextStartDistance(random));
-        return new Vec2f(PosUtil.unpackLeftf(position), PosUtil.unpackRightf(position));
-    }
-
-    static Vec2f sampleBranchLakeCenter(River river, LakeConfig lake, Random random) {
-        // Keep the shipped default preset seed-compatible with the original source placement.
-        if (lake.usesDefaultPresetDistance()) {
-            return new Vec2f(river.x1, river.z1);
-        }
-        return sampleLakeCenter(river, lake, random);
-    }
-
-    static Vec2f sampleAdditionalLakeCenter(int x, int z, River river, LakeConfig lake, Random random) {
-        if (!lake.usesDefaultPresetDistance()) {
-            return sampleLakeCenter(river, lake, random);
-        }
-        // The shipped default also retains the original draw count and 0.6 + [0, 0.3) offset.
-        float angle = 0.0F;
-        float dx = NoiseUtil.sin(angle);
-        float dz = NoiseUtil.cos(angle);
-        float distance = LEGACY_ADDITIONAL_LAKE_DISTANCE.next(random);
-        float lx = x + dx * river.length * distance;
-        float lz = z + dz * river.length * distance;
-        return new Vec2f(lx, lz);
     }
     
     public boolean riverOverlaps(River river, Network.Builder parent, List<Network.Builder> rivers) {

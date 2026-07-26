@@ -14,7 +14,6 @@ import raccoonman.reterraforged.world.worldgen.cell.terrain.TerrainType;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
-import raccoonman.reterraforged.world.worldgen.noise.module.NoiseRootRuntime;
 
 public record Climate(int randomSeed, Noise offsetX, Noise offsetZ, int offsetDistance, Levels levels, ClimateModule biomeNoise) {
 
@@ -28,15 +27,13 @@ public record Climate(int randomSeed, Noise offsetX, Noise offsetZ, int offsetDi
 		} else if (cell.biomeRegionEdge < edgeBlend || cell.terrain == TerrainType.MOUNTAIN_CHAIN) {
 			float modifier = 1.0F - NoiseUtil.map(cell.biomeRegionEdge, 0.0F, edgeBlend, edgeBlend);
 			float distance = this.offsetDistance * modifier;
-			float dx = this.offsetX.computeRoot(x, z, 0) * distance;
-			float dz = this.offsetZ.computeRoot(x, z, 0) * distance;
+			float dx = this.offsetX.compute(x, z, 0) * distance;
+			float dz = this.offsetZ.compute(x, z, 0) * distance;
 			float ox = x;
 			float oz = z;
 			x += dx;
 			z += dz;
-			try(NoiseRootRuntime.LegacyScope ignored = NoiseRootRuntime.legacyCoordinates()) {
-				this.biomeNoise.apply(cell, x, z, ox, oz, false);
-			}
+			this.biomeNoise.apply(cell, x, z, ox, oz, false);
 		}
 	}
 	
@@ -48,8 +45,7 @@ public record Climate(int randomSeed, Noise offsetX, Noise offsetZ, int offsetDi
 		WorldSettings worldSettings = preset.world();
 		ClimateSettings climateSettings = preset.climate();
 		
-		boolean cacheRegions = worldSettings.noiseEngine == WorldSettings.NoiseEngine.LEGACY_V2;
-		ClimateModule biomeNoise = new ClimateModule(context.seed, continent, worldSettings.controlPoints, climateSettings, context.levels, cacheRegions);
+		ClimateModule biomeNoise = new ClimateModule(context.seed, continent, worldSettings.controlPoints, climateSettings, context.levels);
 		Levels levels = context.levels;
 		int randSeed = context.seed.next();
 		

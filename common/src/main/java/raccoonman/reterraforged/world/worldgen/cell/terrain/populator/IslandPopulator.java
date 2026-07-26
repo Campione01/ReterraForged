@@ -42,36 +42,17 @@ public class IslandPopulator implements CellPopulator {
         islandChanceVarianceNoise = Noises.map(islandChanceVarianceNoise, -0.05F, 0.2F);
         this.islandChanceVarianceNoise = islandChanceVarianceNoise;
     }
-
-    IslandPopulator(Levels levels, CellPopulator ocean, float min, float max, Noise islandThresholdNoise, Noise islandChanceVarianceNoise) {
-        this.ocean = ocean;
-        this.upper = upperPopulator(levels, -5);
-        this.interpolation = Interpolation.LINEAR;
-        this.blendLower = min;
-        this.blendUpper = max;
-        this.blendRange = this.blendUpper - this.blendLower;
-        this.islandThresholdNoise = islandThresholdNoise;
-        this.islandChanceVarianceNoise = islandChanceVarianceNoise;
-    }
     
     @Override
     public void apply(Cell cell, float x, float z) {
-	float islandThresholdMin = this.islandThresholdNoise.computeRoot(x, z, 0);
+    	float islandThresholdMin = this.islandThresholdNoise.compute(x, z, 0);
     	float islandThresholdMax = islandThresholdMin + 4.0F;
 
-	float regionVarianceAlpha = cell.terrainRegionId > this.islandChanceVarianceNoise.computeRoot(cell.continentX, cell.continentZ, 0) ? 0.0F : 1.0F;
+    	float regionVarianceAlpha = cell.terrainRegionId > this.islandChanceVarianceNoise.compute(cell.continentX, cell.continentZ, 0) ? 0.0F : 1.0F;
     	float regionEdgeAlpha = NoiseUtil.clamp(cell.terrainRegionEdge, islandThresholdMin, islandThresholdMax);
     	regionEdgeAlpha = NoiseUtil.map(regionEdgeAlpha, 0.0F, 1.0F, 2.0F);
     	
     	float islandAlpha = cell.continentDistance * regionVarianceAlpha * regionEdgeAlpha;
-        if(this.blendRange <= 0.0F) {
-            if(islandAlpha <= this.blendLower) {
-                this.ocean.apply(cell, x, z);
-            } else {
-                this.upper.apply(cell, x, z, islandAlpha);
-            }
-            return;
-        }
         if (islandAlpha < this.blendLower) {
             this.ocean.apply(cell, x, z);
             return;

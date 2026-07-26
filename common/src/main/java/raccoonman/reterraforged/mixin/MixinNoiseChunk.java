@@ -1,7 +1,5 @@
 package raccoonman.reterraforged.mixin;
 
-import java.util.List;
-
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -14,7 +12,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.biome.Climate;
 import net.minecraft.world.level.levelgen.Aquifer;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunctions;
@@ -27,8 +24,6 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
-import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionClimateSampler;
-import raccoonman.reterraforged.world.worldgen.biome.selection.BiomeSelectionSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
@@ -71,7 +66,6 @@ class MixinNoiseChunk {
 		this.randomState = randomState1;
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
 		this.chunkZ = SectionPos.blockToSectionCoord(minBlockZ);
-		NoiseRouter router = randomState.router();
 		GeneratorContext generatorContext;
 		if((Object) randomState instanceof RTFRandomState rtfRandomState && cellCountXZ > 1 && (generatorContext = rtfRandomState.generatorContext()) != null) {
 			if(C2ME_PRESENT) {
@@ -80,7 +74,7 @@ class MixinNoiseChunk {
 			this.chunk = generatorContext.cache.provideAtChunk(this.chunkX, this.chunkZ).getChunkReader(this.chunkX, this.chunkZ);
 		}
 		this.cache2d = new CellSampler.Cache2d();
-		return router;
+		return randomState.router();
 	}
 
 	@ModifyVariable(
@@ -100,7 +94,7 @@ class MixinNoiseChunk {
 				if(noiseGeneratorSettings.seaLevel() != props.seaLevel) {
 					return fluidPicker;
 				}
-				if(!matchesPresetHeight(noiseSettings, props)) {
+				if(noiseSettings.height() != props.worldHeight) {
 					return fluidPicker;
 				}
 				int lavaLevel = props.lavaLevel;
@@ -118,10 +112,6 @@ class MixinNoiseChunk {
 		return fluidPicker;
 	}
 
-	static boolean matchesPresetHeight(NoiseSettings noiseSettings, WorldSettings.Properties properties) {
-		return noiseSettings.height() == properties.worldDepth + properties.worldHeight;
-	}
-
 	@Inject(
 		at = @At("HEAD"),
 		method = "wrapNew",
@@ -135,26 +125,5 @@ class MixinNoiseChunk {
 				callback.setReturnValue(DensityFunctions.zero());
 			}
 		}
-	}
-
-	@Inject(
-		at = @At("RETURN"),
-		method = "cachedClimateSampler"
-	)
-	private void reterraforged$copyBiomeSelectionSampler(
-		NoiseRouter noiseRouter,
-		List<Climate.ParameterPoint> parameters,
-		CallbackInfoReturnable<Climate.Sampler> callback
-	) {
-		if((Object) callback.getReturnValue() instanceof BiomeSelectionClimateSampler cachedSampler
-			&& (Object) this.randomState.sampler() instanceof BiomeSelectionClimateSampler globalSampler) {
-			BiomeSelectionSampler sampler = globalSampler.getBiomeSelectionSampler();
-			cachedSampler.setBiomeSelectionSampler(sampler != null ? sampler.map(this::wrap) : null);
-		}
-	}
-
-	@Shadow
-	private DensityFunction wrap(DensityFunction densityFunction) {
-		throw new IllegalStateException();
 	}
 }

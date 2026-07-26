@@ -18,25 +18,6 @@ record Warp(Noise input, Domain domain) implements Noise {
 	}
 
 	@Override
-	public boolean supportsBulk() {
-		return this.input.supportsBulk() && this.domain.supportsBulk();
-	}
-
-	@Override
-	public void fill(NoiseBatch batch, int seed, float[] output) {
-		float[] xCoordinates = batch.acquire();
-		float[] zCoordinates = batch.acquire();
-		try {
-			this.domain.fillX(batch, seed, xCoordinates);
-			this.domain.fillZ(batch, seed, zCoordinates);
-			this.input.fill(batch.transformed(xCoordinates, zCoordinates), seed, output);
-		} finally {
-			batch.release(zCoordinates);
-			batch.release(xCoordinates);
-		}
-	}
-
-	@Override
 	public float minValue() {
 		return this.input.minValue();
 	}

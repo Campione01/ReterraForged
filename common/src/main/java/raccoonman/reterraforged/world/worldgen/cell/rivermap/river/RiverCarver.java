@@ -56,16 +56,12 @@ public class RiverCarver implements Comparable<RiverCarver> {
     public void carve(Cell cell, float px, float pz, float pt, float x, float z, float t) {
         float d2 = this.getDistance2(x, z, t);
         float pd2 = this.getDistance2(px, pz, pt);
-        float valleyAlpha = this.getDistanceAlpha(pt, Math.min(d2, pd2), this.valleyWidth);
-        if (valleyAlpha == 0.0F) {
-            return;
-        }
         float heightFade = RiverTerrainFade.heightFade(cell.height, this.fadeStartHeight, this.fadeEndHeight);
-        float mountainFade = RiverTerrainFade.mountainFade(cell);
-        float valleyFade = RiverTerrainFade.valleyFade(heightFade, mountainFade);
-        float banksFade = RiverTerrainFade.banksFade(heightFade, mountainFade);
-        float bedFade = RiverTerrainFade.bedFade(heightFade, mountainFade);
+        float valleyFade = RiverTerrainFade.valleyFade(cell, heightFade);
+        float banksFade = RiverTerrainFade.banksFade(cell, heightFade);
+        float bedFade = RiverTerrainFade.bedFade(cell, heightFade);
 
+        float valleyAlpha = this.getDistanceAlpha(pt, Math.min(d2, pd2), this.valleyWidth);
         valleyAlpha *= valleyFade;
         if (valleyAlpha == 0.0F) {
             return;

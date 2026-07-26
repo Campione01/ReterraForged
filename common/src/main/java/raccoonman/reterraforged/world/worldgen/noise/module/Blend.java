@@ -16,7 +16,7 @@ record Blend(Noise alpha, Noise lower, Noise upper, float mid, float range, Inte
 		Codec.FLOAT.fieldOf("range").forGetter(Blend::range),
 		Interpolation.CODEC.fieldOf("interpolation").forGetter(Blend::interpolation)
 	).apply(instance, Blend::new));
-
+	
 	@Override
 	public float minValue() {
 		return Math.min(this.lower.minValue(), this.upper.minValue());
@@ -29,10 +29,10 @@ record Blend(Noise alpha, Noise lower, Noise upper, float mid, float range, Inte
 	
 	@Override
 	public float compute(float x, float z, int seed) {
-		float mid = this.alpha.minValue() + (this.alpha.maxValue() - this.alpha.minValue()) * this.mid;
-		float blendLower = Math.max(this.alpha.minValue(), mid - this.range / 2.0F);
-		float blendUpper = Math.min(this.alpha.maxValue(), mid + this.range / 2.0F);
-		float blendRange = blendUpper - blendLower;
+        float mid = this.alpha.minValue() + (this.alpha.maxValue() - this.alpha.minValue()) * this.mid;
+        float blendLower = Math.max(this.alpha.minValue(), mid - this.range / 2.0F);
+        float blendUpper = Math.min(this.alpha.maxValue(), mid + this.range / 2.0F);
+        float blendRange = blendUpper - blendLower;
 		float alpha = this.alpha.compute(x, z, seed);
         if (alpha < blendLower) {
             return this.lower.compute(x, z, seed);
@@ -52,5 +52,4 @@ record Blend(Noise alpha, Noise lower, Noise upper, float mid, float range, Inte
 	public MapCodec<Blend> codec() {
 		return CODEC;
 	}
-
 }

@@ -106,8 +106,10 @@ public class PresetConfiguredFeatures {
 	
 	public static void bootstrap(Preset preset, BootstrapContext<ConfiguredFeature<?, ?>> ctx) {
 		MiscellaneousSettings miscellaneous = preset.miscellaneous();
+		SurfaceSettings surface = preset.surface();
+		SurfaceSettings.Erosion erosion = surface.erosion();
 		
-		ErodeFeature.Config erodeConfig = createErodeConfig(preset);
+		ErodeFeature.Config erodeConfig = new ErodeFeature.Config(erosion.rockVariance, erosion.rockMin, erosion.dirtVariance, erosion.dirtMin, erosion.rockSteepness, erosion.dirtSteepness, erosion.screeSteepness, 6F / 255F, 3F / 255F, 256, 3F / 255F, 0.55F);
 		if(miscellaneous.erosionDecorator) {
 			FeatureUtils.register(ctx, ERODE, RTFFeatures.ERODE, erodeConfig);
 		}
@@ -303,11 +305,6 @@ public class PresetConfiguredFeatures {
     
 	private static <FC extends FeatureConfiguration, F extends Feature<FC>> Holder<PlacedFeature> makeInlined(F feature, FC featureConfiguration) {
 		return Holder.direct(new PlacedFeature(Holder.direct(new ConfiguredFeature<>(feature, featureConfiguration)), ImmutableList.of()));
-	}
-
-	static ErodeFeature.Config createErodeConfig(Preset preset) {
-		SurfaceSettings.Erosion erosion = preset.surface().erosion();
-		return new ErodeFeature.Config(erosion.rockVariance, erosion.rockMin, erosion.dirtVariance, erosion.dirtMin, erosion.rockSteepness, erosion.dirtSteepness, erosion.screeSteepness, 6F / 255F, 3F / 255F, 256, 3F / 255F, 0.55F, preset.miscellaneous().plainStoneErosion);
 	}
 
 	protected static ResourceKey<ConfiguredFeature<?, ?>> createKey(String name) {
