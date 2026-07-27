@@ -62,7 +62,7 @@ public record LinearSplineFunction(DensityFunction input, List<Pair<Double, Dens
 	@Override
 	public DensityFunction mapAll(Visitor visitor) {
 		return visitor.apply(new LinearSplineFunction(this.input.mapAll(visitor), this.points.stream().map((point) -> {
-			return Pair.of(point.getFirst(), visitor.apply(point.getSecond()));
+			return Pair.of(point.getFirst(), point.getSecond().mapAll(visitor));
 		}).toList()));
 	}
 

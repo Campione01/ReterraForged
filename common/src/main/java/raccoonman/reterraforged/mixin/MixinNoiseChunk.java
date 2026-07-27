@@ -1,5 +1,7 @@
 package raccoonman.reterraforged.mixin;
 
+import java.util.function.Function;
+
 import org.jetbrains.annotations.Nullable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
@@ -25,6 +27,9 @@ import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.densityfunction.CellSampler;
+import raccoonman.reterraforged.world.worldgen.densityfunction.ClampToNearestUnit;
+import raccoonman.reterraforged.world.worldgen.densityfunction.ConditionalFlatCache;
+import raccoonman.reterraforged.world.worldgen.densityfunction.LinearSplineFunction;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 
 @Mixin(NoiseChunk.class)
@@ -67,7 +72,9 @@ class MixinNoiseChunk {
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
 		this.chunkZ = SectionPos.blockToSectionCoord(minBlockZ);
 		GeneratorContext generatorContext;
-		if((Object) randomState instanceof RTFRandomState rtfRandomState && cellCountXZ > 1 && (generatorContext = rtfRandomState.generatorContext()) != null) {
+		// Base-height and base-column queries use a one-cell NoiseChunk but still
+		// require the same block-resolution Tile data as full chunk generation.
+		if((Object) randomState instanceof RTFRandomState rtfRandomState && (generatorContext = rtfRandomState.generatorContext()) != null) {
 			if(C2ME_PRESENT) {
 				generatorContext.cache.queueAtChunk(this.chunkX, this.chunkZ);
 			}
@@ -118,12 +125,37 @@ class MixinNoiseChunk {
 		cancellable = true
 	)
 	private void wrapNew(DensityFunction function, CallbackInfoReturnable<DensityFunction> callback) {
-		if((Object) this.randomState instanceof RTFRandomState randomState && function instanceof CellSampler mapped) {
-			if(randomState.generatorContext() != null) {
-				callback.setReturnValue(mapped.new CacheChunk(this.chunk, this.cache2d, this.chunkX, this.chunkZ));
-			} else {
-				callback.setReturnValue(DensityFunctions.zero());
+		if((Object) this.randomState instanceof RTFRandomState randomState) {
+			if(function instanceof CellSampler mapped) {
+				callback.setReturnValue(this.wrapCellSampler(mapped, randomState));
+				return;
+			}
+			if(C2ME_PRESENT) {
+				DensityFunction repaired = repairC2MEShallowMapping(function, (mapped) -> {
+					return this.wrapCellSampler(mapped, randomState);
+				});
+				if(repaired != function) {
+					callback.setReturnValue(repaired);
+				}
 			}
 		}
+	}
+
+	private DensityFunction wrapCellSampler(CellSampler sampler, RTFRandomState randomState) {
+		if(randomState.generatorContext() != null) {
+			return sampler.new CacheChunk(this.chunk, this.cache2d, this.chunkX, this.chunkZ);
+		}
+		return DensityFunctions.zero();
+	}
+
+	static DensityFunction repairC2MEShallowMapping(DensityFunction function, Function<CellSampler, DensityFunction> mapper) {
+		if(!(function instanceof ClampToNearestUnit)
+			&& !(function instanceof ConditionalFlatCache)
+			&& !(function instanceof LinearSplineFunction)) {
+			return function;
+		}
+		return function.mapAll((child) -> {
+			return child instanceof CellSampler sampler ? mapper.apply(sampler) : child;
+		});
 	}
 }
