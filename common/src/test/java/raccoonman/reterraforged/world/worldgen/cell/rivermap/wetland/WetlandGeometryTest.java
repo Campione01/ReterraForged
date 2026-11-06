@@ -92,25 +92,64 @@ class WetlandGeometryTest {
     }
 
     @Test
-    void doesNotFormPoolsAtMountainEdgesAndRetainsErosionProtection() {
+    void blendsValleyLoweringContinuouslyAcrossTheMountainEdge() {
         Wetland wetland = new Wetland(42, A, B, RADIUS, LEVELS);
         float high = LEVELS.ground(18);
-        float low = LEVELS.water(0);
-        for (float edge : new float[] {0.0F, 0.175F, 0.35F, 1.0F}) {
+        float z = A.y() + 80.0F;
+        float band = (1.0F - 80.0F * 80.0F / (RADIUS * RADIUS)) / 0.65F;
+        Cell flat = flat(high);
+        wetland.apply(flat, 72.0F, z, 901.0F, -230.0F);
+        float previousHeight = Float.NEGATIVE_INFINITY;
+        for (int i = 0; i <= 8; i++) {
+            float edge = 0.35F * i / 8;
             Cell aboveBank = mountain(high, edge);
-            wetland.apply(aboveBank, 72.0F, A.y(), 901.0F, -230.0F);
-            assertEquals(NoiseUtil.lerp(high, LEVELS.ground(3), 0.2F), aboveBank.height);
-            assertEquals(0.8F, aboveBank.riverMask);
-            assertTrue(aboveBank.erosionMask);
+            wetland.apply(aboveBank, 72.0F, z, 901.0F, -230.0F);
+            float t = edge / 0.35F;
+            float alpha = band * (1.0F - 0.8F * t * t * (3.0F - 2.0F * t));
+            assertEquals(NoiseUtil.lerp(high, LEVELS.ground(3), alpha), aboveBank.height, 1.0e-7F,
+                    "valley lowering at mountain edge " + edge);
+            assertEquals(1.0F - alpha, aboveBank.riverMask, 1.0e-7F, "river mask at mountain edge " + edge);
+            assertTrue(aboveBank.height > previousHeight, "Lowering should taper through the mountain edge");
             assertSame(TerrainType.MOUNTAINS_1, aboveBank.terrain);
-
-            Cell poolHeight = mountain(low, edge);
-            wetland.apply(poolHeight, 72.0F, A.y(), 901.0F, -230.0F);
-            assertEquals(low, poolHeight.height);
-            assertFalse(poolHeight.erosionMask);
-            assertSame(TerrainType.MOUNTAINS_1, poolHeight.terrain);
+            if (i == 0) {
+                assertEquals(flat.height, aboveBank.height, "A mountain at the boundary must meet the flat side");
+                assertEquals(flat.riverMask, aboveBank.riverMask);
+            }
+            previousHeight = aboveBank.height;
         }
+        Cell interior = mountain(high, 1.0F);
+        wetland.apply(interior, 72.0F, z, 901.0F, -230.0F);
+        assertEquals(previousHeight, interior.height);
+    }
 
+    @Test
+    void fadesPoolsAtMountainEdgesWithoutTaggingMountainCells() {
+        Wetland wetland = new Wetland(42, A, B, RADIUS, LEVELS);
+        float bank = LEVELS.ground(3);
+        Cell flat = flat(bank);
+        Cell edge = mountain(bank, 0.0F);
+        Cell middle = mountain(bank, 0.2625F);
+        Cell interior = mountain(bank, 0.35F);
+        for (Cell cell : new Cell[] {flat, edge, middle, interior}) {
+            wetland.apply(cell, 72.0F, A.y(), 901.0F, -230.0F);
+        }
+        assertSame(TerrainType.WETLAND, flat.terrain, "The flat pool must exercise the wetland tag");
+        assertEquals(flat.height, edge.height, "The mountain boundary must have the same pool geometry");
+        assertTrue(edge.height < middle.height && middle.height < bank, "A partial pool should reach the soft edge");
+        assertEquals(65.140625F / LEVELS.worldHeight, middle.height, 1.0e-7F, "Soft-edge pool before mounds");
+        assertEquals(bank, interior.height, "No pool in the mountain interior");
+        for (Cell cell : new Cell[] {edge, middle, interior}) {
+            assertSame(TerrainType.MOUNTAINS_1, cell.terrain);
+        }
+    }
+
+    @Test
+    void retainsTheMountainErosionFootprintAndHeightFade() {
+        Wetland wetland = new Wetland(42, A, B, RADIUS, LEVELS);
+        float high = LEVELS.ground(18);
+        Cell center = mountain(high, 1.0F);
+        wetland.apply(center, 72.0F, A.y(), 901.0F, -230.0F);
+        assertTrue(center.erosionMask);
         Cell farFromAxis = mountain(high, 1.0F);
         wetland.apply(farFromAxis, 72.0F, A.y() + 85.0F, 901.0F, -230.0F);
         assertTrue(farFromAxis.height < high);

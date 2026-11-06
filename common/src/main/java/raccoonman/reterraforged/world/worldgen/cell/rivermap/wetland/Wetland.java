@@ -67,34 +67,29 @@ public class Wetland {
         }
         boolean mountain = RiverTerrainFade.isMountain(cell);
         float valleyFade = RiverTerrainFade.valleyFade(cell, heightFade);
-        if (mountain) {
-            // Keep the pre-carve protection footprint; the new squared falloff is wider.
-            if (cell.height > this.mountainErosionThreshold
-                    && (1.0F - (float)Math.sqrt(d2) / this.radius) * valleyFade > 0.05F) {
-                cell.erosionMask = true;
-            }
-            valleyFade = heightFade * RiverTerrainFade.MOUNTAIN_VALLEY_FADE;
+        // Keep the pre-carve protection footprint; the new squared falloff is wider.
+        if (mountain && cell.height > this.mountainErosionThreshold
+                && (1.0F - (float)Math.sqrt(d2) / this.radius) * valleyFade > 0.05F) {
+            cell.erosionMask = true;
         }
         float valleyAlpha = NoiseUtil.map(dist, 0.0F, VALLEY, VALLEY) * valleyFade;
         if (cell.height > this.banks) {
             cell.height = NoiseUtil.lerp(cell.height, this.banks, valleyAlpha);
         }
-        if (!mountain) {
-            float poolsAlpha = NoiseUtil.map(dist, VALLEY, POOLS, BANKS) * RiverTerrainFade.bedFade(cell, heightFade);
-            if (cell.height > this.bed && cell.height <= this.banks) {
-                cell.height = NoiseUtil.lerp(cell.height, this.bed, poolsAlpha);
-            }
-            if (poolsAlpha >= 1.0F) {
-                cell.erosionMask = true;
-            }
-            if (dist > VALLEY && poolsAlpha > this.terrainEdge.compute(x, z, 0)) {
-                cell.terrain = TerrainType.WETLAND;
-            }
-            if (cell.height >= this.bed && cell.height < this.moundMax) {
-                float shapeAlpha = this.moundShape.compute(x, z, 0) * poolsAlpha;
-                float mounds = this.moundMin + this.moundHeight.compute(x, z, 0) * this.moundVariance;
-                cell.height = NoiseUtil.lerp(cell.height, mounds, shapeAlpha);
-            }
+        float poolsAlpha = NoiseUtil.map(dist, VALLEY, POOLS, BANKS) * RiverTerrainFade.bedFade(cell, heightFade);
+        if (cell.height > this.bed && cell.height <= this.banks) {
+            cell.height = NoiseUtil.lerp(cell.height, this.bed, poolsAlpha);
+        }
+        if (poolsAlpha >= 1.0F) {
+            cell.erosionMask = true;
+        }
+        if (!mountain && dist > VALLEY && poolsAlpha > this.terrainEdge.compute(x, z, 0)) {
+            cell.terrain = TerrainType.WETLAND;
+        }
+        if (cell.height >= this.bed && cell.height < this.moundMax) {
+            float shapeAlpha = this.moundShape.compute(x, z, 0) * poolsAlpha;
+            float mounds = this.moundMin + this.moundHeight.compute(x, z, 0) * this.moundVariance;
+            cell.height = NoiseUtil.lerp(cell.height, mounds, shapeAlpha);
         }
         cell.riverMask = Math.min(cell.riverMask, 1.0F - valleyAlpha);
     }
