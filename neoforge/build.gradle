@@ -1,3 +1,7 @@
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.attribute.BasicFileAttributeView
+
 plugins {
     id "com.github.johnrengelman.shadow" version "7.1.2"
 }
@@ -79,6 +83,18 @@ remapJar {
 
     input.set shadowJar.archiveFile
     dependsOn shadowJar
+
+    doLast {
+        // Loom emits the generated access rules in unspecified order.
+        FileSystems.newFileSystem(archiveFile.get().asFile.toPath(), Collections.emptyMap()).withCloseable { zip ->
+            def rules = zip.getPath('/META-INF/accesstransformer.cfg')
+            def times = Files.getFileAttributeView(rules, BasicFileAttributeView)
+            def original = times.readAttributes()
+            def lines = Files.readAllLines(rules)
+            Files.writeString(rules, lines.sort().join('\n') + '\n')
+            times.setTimes(original.lastModifiedTime(), original.lastAccessTime(), original.creationTime())
+        }
+    }
 }
 
 jar {
