@@ -31,6 +31,7 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.ClampToNearestUni
 import raccoonman.reterraforged.world.worldgen.densityfunction.ConditionalFlatCache;
 import raccoonman.reterraforged.world.worldgen.densityfunction.LinearSplineFunction;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
+import raccoonman.reterraforged.world.worldgen.structure.StructureProbe;
 
 @Mixin(NoiseChunk.class)
 class MixinNoiseChunk {
@@ -68,6 +69,10 @@ class MixinNoiseChunk {
 		method = "<init>"
 	)
 	private NoiseRouter NoiseChunk(RandomState randomState1, int cellCountXZ, RandomState randomState2, int minBlockX, int minBlockZ) {
+		if(StructureProbe.bypass(randomState1, cellCountXZ, minBlockX, minBlockZ)) {
+			// Leave wrapNew inactive so the probe can sample through the raw CellSampler.
+			return randomState1.router();
+		}
 		this.randomState = randomState1;
 		this.chunkX = SectionPos.blockToSectionCoord(minBlockX);
 		this.chunkZ = SectionPos.blockToSectionCoord(minBlockZ);
