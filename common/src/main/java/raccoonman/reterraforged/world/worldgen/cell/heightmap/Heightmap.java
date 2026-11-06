@@ -40,9 +40,7 @@ public record Heightmap(CellPopulator terrain, CellPopulator region, Continent c
 	
 	public void apply(Cell cell, float x, float z, boolean applyClimate) {
 		this.applyTerrain(cell, x, z);
-		if (cell.terrain == TerrainType.ISLAND_BEACH) {
-			cell.terrain = TerrainType.BEACH;
-		}
+		// Preserve the island tag for climate; WorldLookup normalizes the final shoreline.
 		this.applyRivers(cell, x, z, this.continent.getRivermap(cell));
 		this.applyClimate(cell, x, z, applyClimate);
 	}
