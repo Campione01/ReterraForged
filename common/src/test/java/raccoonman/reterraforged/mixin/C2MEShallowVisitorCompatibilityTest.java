@@ -4,8 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -24,6 +28,8 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.ConditionalFlatCa
 import raccoonman.reterraforged.world.worldgen.densityfunction.LinearSplineFunction;
 
 class C2MEShallowVisitorCompatibilityTest {
+	private static final Method REPAIR_C2ME_SHALLOW_MAPPING = findRepairMethod();
+
 	@BeforeAll
 	static void bootstrapMinecraft() {
 		SharedConstants.tryDetectVersion();
@@ -36,7 +42,7 @@ class C2MEShallowVisitorCompatibilityTest {
 		ClampToNearestUnit root = new ClampToNearestUnit(holder(sampler), 64);
 		AtomicInteger mapped = new AtomicInteger();
 
-		DensityFunction repaired = MixinNoiseChunk.repairC2MEShallowMapping(root, (cellSampler) -> {
+		DensityFunction repaired = repairC2MEShallowMapping(root, (cellSampler) -> {
 			mapped.incrementAndGet();
 			return cellSampler.new CacheChunk(null, new CellSampler.Cache2d(), 0, 0);
 		});
@@ -62,7 +68,7 @@ class C2MEShallowVisitorCompatibilityTest {
 		ClampToNearestUnit root = new ClampToNearestUnit(holder(spline), 128);
 		AtomicInteger mapped = new AtomicInteger();
 
-		DensityFunction repaired = MixinNoiseChunk.repairC2MEShallowMapping(root, (cellSampler) -> {
+		DensityFunction repaired = repairC2MEShallowMapping(root, (cellSampler) -> {
 			mapped.incrementAndGet();
 			return DensityFunctions.constant(cellSampler.field().ordinal() / 16.0D);
 		});
@@ -82,7 +88,7 @@ class C2MEShallowVisitorCompatibilityTest {
 		);
 		AtomicInteger mapped = new AtomicInteger();
 
-		DensityFunction repaired = MixinNoiseChunk.repairC2MEShallowMapping(vanilla, (cellSampler) -> {
+		DensityFunction repaired = repairC2MEShallowMapping(vanilla, (cellSampler) -> {
 			mapped.incrementAndGet();
 			return DensityFunctions.zero();
 		});
@@ -93,7 +99,7 @@ class C2MEShallowVisitorCompatibilityTest {
 		DensityFunction thirdParty = new ThirdPartyComposite(
 			holder(sampler(CellSampler.Field.EROSION))
 		);
-		DensityFunction thirdPartyRepair = MixinNoiseChunk.repairC2MEShallowMapping(thirdParty, (cellSampler) -> {
+		DensityFunction thirdPartyRepair = repairC2MEShallowMapping(thirdParty, (cellSampler) -> {
 			mapped.incrementAndGet();
 			return DensityFunctions.zero();
 		});
@@ -104,7 +110,7 @@ class C2MEShallowVisitorCompatibilityTest {
 		CellSampler sampler = sampler(CellSampler.Field.HEIGHT);
 		CellSampler.CacheChunk cacheChunk = sampler.new CacheChunk(null, new CellSampler.Cache2d(), 0, 0);
 		ClampToNearestUnit cachedRoot = new ClampToNearestUnit(cacheChunk, 64);
-		DensityFunction cachedRepair = MixinNoiseChunk.repairC2MEShallowMapping(cachedRoot, (cellSampler) -> {
+		DensityFunction cachedRepair = repairC2MEShallowMapping(cachedRoot, (cellSampler) -> {
 			mapped.incrementAndGet();
 			return DensityFunctions.zero();
 		});
@@ -112,6 +118,35 @@ class C2MEShallowVisitorCompatibilityTest {
 		assertEquals(0, mapped.get());
 		assertEquals(0, countCellSamplers(cachedRepair));
 		assertTrue(((ClampToNearestUnit) cachedRepair).function() instanceof CellSampler.CacheChunk);
+	}
+
+	private static Method findRepairMethod() {
+		try {
+			Method method = MixinNoiseChunk.class.getDeclaredMethod("repairC2MEShallowMapping", DensityFunction.class, Function.class);
+			assertEquals(DensityFunction.class, method.getReturnType());
+			assertTrue(Modifier.isPrivate(method.getModifiers()));
+			assertTrue(Modifier.isStatic(method.getModifiers()));
+			method.setAccessible(true);
+			return method;
+		} catch(NoSuchMethodException e) {
+			throw new AssertionError(e);
+		}
+	}
+
+	private static DensityFunction repairC2MEShallowMapping(DensityFunction function, Function<CellSampler, DensityFunction> mapper) {
+		try {
+			return (DensityFunction) REPAIR_C2ME_SHALLOW_MAPPING.invoke(null, function, mapper);
+		} catch(IllegalAccessException e) {
+			throw new AssertionError(e);
+		} catch(InvocationTargetException e) {
+			if(e.getCause() instanceof RuntimeException cause) {
+				throw cause;
+			}
+			if(e.getCause() instanceof Error cause) {
+				throw cause;
+			}
+			throw new AssertionError(e.getCause());
+		}
 	}
 
 	private static DensityFunction holder(DensityFunction function) {

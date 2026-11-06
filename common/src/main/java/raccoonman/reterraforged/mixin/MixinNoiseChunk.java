@@ -148,7 +148,7 @@ class MixinNoiseChunk {
 		return DensityFunctions.zero();
 	}
 
-	static DensityFunction repairC2MEShallowMapping(DensityFunction function, Function<CellSampler, DensityFunction> mapper) {
+	private static DensityFunction repairC2MEShallowMapping(DensityFunction function, Function<CellSampler, DensityFunction> mapper) {
 		if(!(function instanceof ClampToNearestUnit)
 			&& !(function instanceof ConditionalFlatCache)
 			&& !(function instanceof LinearSplineFunction)) {
