@@ -52,7 +52,7 @@ public class Presets {
 				new River(5, 2, 6, 20, 8, 0.75F),
 				new River(4, 1, 4, 14, 5, 0.975F), 
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
-				new Wetland(0.6F, 175, 225)
+				new Wetland(0.8F, 175, 225)
 			), 
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
@@ -97,7 +97,7 @@ public class Presets {
 				new River(5, 2, 6, 20, 8, 0.75F),
 				new River(4, 1, 4, 14, 5, 0.975F), 
 				new Lake(0.3F, 0.0F, 0.03F, 10, 75, 150, 2, 10),
-				new Wetland(0.6F, 175, 225)
+				new Wetland(0.8F, 175, 225)
 			), 
 			new FilterSettings(
 				new Erosion(135, 12, 0.7F, 0.7F, 0.5F, 0.5F),
