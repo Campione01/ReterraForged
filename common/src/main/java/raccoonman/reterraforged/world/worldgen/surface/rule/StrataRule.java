@@ -27,6 +27,8 @@ import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.noise.module.Noises;
 import raccoonman.reterraforged.world.worldgen.surface.RTFSurfaceSystem;
+import raccoonman.reterraforged.world.worldgen.surface.StrataBiomeContext;
+import raccoonman.reterraforged.world.worldgen.surface.StrataBiomeExclusions;
 
 public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Strata> strata, int iterations) implements SurfaceRules.RuleSource {
 	public static final MapCodec<StrataRule> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
@@ -43,7 +45,8 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 	@Override
 	public SurfaceRules.SurfaceRule apply(Context ctx) {
 		if(ctx.system instanceof RTFSurfaceSystem rtfSurfaceSystem && (Object) ctx.randomState instanceof RTFRandomState rtfRandomState && rtfRandomState.generatorContext() != null) {
-			return new Source(ctx, rtfRandomState.seed(this.selector.value()), rtfSurfaceSystem.getOrCreateStrata(this.name, this::generateStrata));
+			var exclusions = (Object) ctx instanceof StrataBiomeContext biomes ? biomes.reterraforged$strataExclusions() : StrataBiomeExclusions.EXACT;
+			return new Source(ctx, rtfRandomState.seed(this.selector.value()), rtfSurfaceSystem.getOrCreateStrata(this.name, this::generateStrata), exclusions);
 		} else {
 			return (x, y, z) -> null;
 		}
@@ -117,12 +120,16 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
 		private List<Layer> layers;
 		private float[] depthBuffer;
 		private long lastUpdateXZ;
+		private final @Nullable StrataBiomeExclusions exclusions;
+		private int exclusionQuartY = Integer.MIN_VALUE;
+		private boolean mightExclude;
 		
-		public Source(Context surfaceContext, Noise selector, List<List<Layer>> strata) {
+		public Source(Context surfaceContext, Noise selector, List<List<Layer>> strata, @Nullable StrataBiomeExclusions exclusions) {
 			this.surfaceContext = surfaceContext;
 			this.selector = selector;
 			this.strata = strata;
 			this.lastUpdateXZ = Long.MIN_VALUE;
+			this.exclusions = exclusions;
 		}
 		
         @Nullable
@@ -131,7 +138,18 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
         	if(this.lastUpdateXZ != this.surfaceContext.lastUpdateXZ) {
         		this.initBuffer(x, z);
         		this.lastUpdateXZ = this.surfaceContext.lastUpdateXZ;
+				this.exclusionQuartY = Integer.MIN_VALUE;
         	}
+			if (this.exclusions != null) {
+				int quartY = StrataBiomeExclusions.quart(y);
+				if (this.exclusionQuartY != quartY) {
+					this.exclusionQuartY = quartY;
+					this.mightExclude = this.exclusions.mightExclude(x, y, z);
+				}
+				if (this.mightExclude && this.surfaceContext.biome.get().is(StrataBiomeExclusions.TAG)) {
+					return null;
+				}
+			}
         	
         	Layer last = null;
         	for(int i = 0; i < this.layers.size(); i++) {

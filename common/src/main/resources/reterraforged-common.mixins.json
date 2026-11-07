@@ -12,6 +12,8 @@
 		"MixinUtil",
 		"MixinBiomeGenerationSettings",
 		"MixinSurfaceSystem",
+		"MixinStrataSurfaceContext",
+		"MixinStrataBiomeManager",
 		"MixinStructure",
 		"MixinStructureCheck",
 		"MixinMinecraftServer",
