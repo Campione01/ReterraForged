@@ -140,7 +140,7 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
         		this.lastUpdateXZ = this.surfaceContext.lastUpdateXZ;
 				this.exclusionQuartY = Integer.MIN_VALUE;
         	}
-			if (this.exclusions != null) {
+			if (y <= StrataBiomeExclusions.MAX_YIELD_Y && this.exclusions != null) {
 				int quartY = StrataBiomeExclusions.quart(y);
 				if (this.exclusionQuartY != quartY) {
 					this.exclusionQuartY = quartY;

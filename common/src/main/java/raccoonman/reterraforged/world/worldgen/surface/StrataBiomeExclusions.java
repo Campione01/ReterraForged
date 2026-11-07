@@ -10,6 +10,8 @@ import raccoonman.reterraforged.RTFCommon;
 
 public final class StrataBiomeExclusions {
 	public static final TagKey<Biome> TAG = TagKey.create(Registries.BIOME, RTFCommon.location("strata_excluded"));
+	// Alex's Caves surface conditions cannot replace strata above this height.
+	public static final int MAX_YIELD_Y = 50;
 	public static final StrataBiomeExclusions EXACT = new StrataBiomeExclusions();
 
 	private static final int QUARTS = 6;
