@@ -64,6 +64,7 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 
 	public static class Cache2d {
 		private long lastPos = Long.MAX_VALUE;
+		private Object lastLookupIdentity;
 		private Cell cell = new Cell();
 		
 		public Cell getAndUpdate(WorldLookup lookup, int blockX, int blockZ, boolean sampleClimate) {
@@ -71,10 +72,12 @@ public record CellSampler(Supplier<WorldLookup> deferredLookup, Field field) imp
 			blockZ = QuartPos.toBlock(QuartPos.fromBlock(blockZ));
 			
 			long packedPos = PosUtil.pack(blockX, blockZ);
-			if(this.lastPos != packedPos) {
+			Object lookupIdentity = lookup.cacheIdentity();
+			if(this.lastPos != packedPos || this.lastLookupIdentity != lookupIdentity) {
 				lookup.applyCell(this.cell.reset(), blockX, blockZ, false, sampleClimate);
 				lookup.getHeightmap().fakeWaterBiomeResolver().apply(this.cell);
 				this.lastPos = packedPos;
+				this.lastLookupIdentity = lookupIdentity;
 				if (this.cell.fakeWaterBiome.isRiver()) {
 					this.cell.erosion = Erosion.LEVEL_6.mid();
 					this.cell.weirdness = Weirdness.VALLEY.mid();

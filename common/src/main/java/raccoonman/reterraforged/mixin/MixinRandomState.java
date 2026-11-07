@@ -16,8 +16,10 @@ import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Climate;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.levelgen.DensityFunction;
 import net.minecraft.world.level.levelgen.DensityFunction.NoiseHolder;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
 import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
 import net.minecraft.world.level.levelgen.NoiseRouter;
 import net.minecraft.world.level.levelgen.RandomState;
@@ -97,14 +99,20 @@ class MixinRandomState {
 	}
 
 	public void reterraforged$RTFRandomState$initialize(ServerLevel level) {
+		this.reterraforged$RTFRandomState$initialize(level, null);
+	}
+
+	public void reterraforged$RTFRandomState$initialize(ServerLevel level, @Nullable ChunkGenerator generator) {
 		RegistryAccess registries = level.registryAccess();
 
-		if(!level.dimension().equals(Level.OVERWORLD)) {
+		if(!level.dimension().equals(Level.OVERWORLD) && (
+				!(generator instanceof NoiseBasedChunkGenerator noiseGenerator)
+				|| !noiseGenerator.generatorSettings().is(NoiseGeneratorSettings.OVERWORLD)
+				|| registries.lookup(RTFRegistries.PRESET).flatMap(presets -> presets.get(Preset.KEY)).isEmpty())) {
 			this.clearGeneratorContext();
 			return;
 		}
 
-		// 只在主世界应用RTF地形
 		RegistryLookup<Preset> presets = registries.lookupOrThrow(RTFRegistries.PRESET);
 		RegistryLookup<Noise> noises = registries.lookupOrThrow(RTFRegistries.NOISE);
 		RegistryLookup<DensityFunction> functions = registries.lookupOrThrow(Registries.DENSITY_FUNCTION);

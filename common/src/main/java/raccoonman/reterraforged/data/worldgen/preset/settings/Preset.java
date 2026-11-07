@@ -66,7 +66,7 @@ public record Preset(WorldSettings world, SurfaceSettings surface, CaveSettings 
 		});
 		this.addPatch(builder, Registries.PLACED_FEATURE, PresetPlacedFeatures::bootstrap);
 		this.addPatch(builder, Registries.BIOME, PresetBiomeData::bootstrap);
-		this.addPatch(builder, Registries.DIMENSION_TYPE, PresetDimensionTypes::bootstrap);
+		this.addPatch(builder, Registries.DIMENSION_TYPE, (preset, ctx) -> PresetDimensionTypes.bootstrap(preset, ctx, registries));
 		this.addPatch(builder, Registries.DENSITY_FUNCTION, (preset, ctx) -> {
 			PresetNoiseRouterData.bootstrap(preset, ctx);
 			TBNoiseRouterData.bootstrap(ctx);

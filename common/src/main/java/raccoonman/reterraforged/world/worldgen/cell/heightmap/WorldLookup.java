@@ -7,6 +7,8 @@ import raccoonman.reterraforged.world.worldgen.densityfunction.tile.Tile;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCache;
 
 public class WorldLookup {
+	// A cached token does not keep this lookup or its tile cache alive.
+	private final Object cacheIdentity = new Object();
 	private float waterLevel;
 	private float beachLevel;
 	private TileCache cache;
@@ -23,6 +25,10 @@ public class WorldLookup {
 	
 	public Heightmap getHeightmap() {
 		return this.heightmap;
+	}
+
+	public final Object cacheIdentity() {
+		return this.cacheIdentity;
 	}
 
 	public boolean applyCell(Cell cell, int x, int z, boolean applyClimate) {

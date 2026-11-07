@@ -1,5 +1,7 @@
 package raccoonman.reterraforged.data.worldgen.preset;
 
+import static raccoonman.reterraforged.data.worldgen.preset.PresetDensityKeys.remapKey;
+
 import java.util.stream.Stream;
 
 import net.minecraft.core.HolderGetter;
@@ -37,7 +39,7 @@ public class PresetNoiseRouterData {
 	private static final int CAVE_BIOME_COMPAT_Y_MAX = 48;
 	
     public static void bootstrap(Preset preset, BootstrapContext<DensityFunction> ctx) {
-        HolderGetter<DensityFunction> densityFunctions = ctx.lookup(Registries.DENSITY_FUNCTION);
+        HolderGetter<DensityFunction> densityFunctions = PresetDensityKeys.remapLookup(ctx.lookup(Registries.DENSITY_FUNCTION));
         HolderGetter<NormalNoise.NoiseParameters> noiseParams = ctx.lookup(Registries.NOISE);
         
     	WorldSettings worldSettings = preset.world();
@@ -48,26 +50,28 @@ public class PresetNoiseRouterData {
         int worldHeight = properties.worldHeight;
         int worldDepth = properties.worldDepth;
         
-        ctx.register(NoiseRouterData.CONTINENTS, RTFDensityFunctions.cell(CellSampler.Field.CONTINENT));
-        ctx.register(NoiseRouterData.EROSION, RTFDensityFunctions.cell(CellSampler.Field.EROSION));
-        ctx.register(NoiseRouterData.RIDGES, RTFDensityFunctions.cell(CellSampler.Field.WEIRDNESS));
+        ctx.register(remapKey(NoiseRouterData.CONTINENTS), RTFDensityFunctions.cell(CellSampler.Field.CONTINENT));
+        ctx.register(remapKey(NoiseRouterData.EROSION), RTFDensityFunctions.cell(CellSampler.Field.EROSION));
+        ctx.register(remapKey(NoiseRouterData.RIDGES), RTFDensityFunctions.cell(CellSampler.Field.WEIRDNESS));
 
         DensityFunction height = NoiseRouterData.registerAndWrap(ctx, HEIGHT, RTFDensityFunctions.cell(CellSampler.Field.HEIGHT));
-        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, NoiseRouterData.OFFSET, DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(RTFDensityFunctions.clampToNearestUnit(height, properties.terrainScaler()), DensityFunctions.constant(2.0D))));
-        ctx.register(NoiseRouterData.DEPTH, DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset));
-        ctx.register(NoiseRouterData.BASE_3D_NOISE_OVERWORLD, DensityFunctions.zero());
-        ctx.register(NoiseRouterData.JAGGEDNESS, jaggednessPerformanceHack());
+        DensityFunction offset = NoiseRouterData.registerAndWrap(ctx, remapKey(NoiseRouterData.OFFSET), DensityFunctions.add(DensityFunctions.constant(NoiseRouterData.GLOBAL_OFFSET - 0.5F), DensityFunctions.mul(RTFDensityFunctions.clampToNearestUnit(height, properties.terrainScaler()), DensityFunctions.constant(2.0D))));
+        ctx.register(remapKey(NoiseRouterData.DEPTH), DensityFunctions.add(DensityFunctions.yClampedGradient(-worldDepth, worldHeight, yGradientRange(-worldDepth), yGradientRange(worldHeight)), offset));
+        ctx.register(remapKey(NoiseRouterData.BASE_3D_NOISE_OVERWORLD), DensityFunctions.zero());
+        ctx.register(remapKey(NoiseRouterData.JAGGEDNESS), jaggednessPerformanceHack());
                 
-        ctx.register(NoiseRouterData.NOODLE, noodle(-worldDepth, worldHeight, 1.0F - caveSettings.noodleCaveProbability, densityFunctions, noiseParams));
-        ctx.register(NoiseRouterData.ENTRANCES, probabilityDensity(caveSettings.entranceCaveProbability, NoiseRouterData.entrances(densityFunctions, noiseParams)));
-        ctx.register(NoiseRouterData.SPAGHETTI_2D, probabilityDensity(caveSettings.spaghettiCaveProbability, spaghetti2D(-worldDepth, worldHeight, densityFunctions, noiseParams)));
+        ctx.register(remapKey(NoiseRouterData.NOODLE), noodle(-worldDepth, worldHeight, 1.0F - caveSettings.noodleCaveProbability, densityFunctions, noiseParams));
+        ctx.register(remapKey(NoiseRouterData.ENTRANCES), probabilityDensity(caveSettings.entranceCaveProbability, NoiseRouterData.entrances(densityFunctions, noiseParams)));
+        ctx.register(remapKey(NoiseRouterData.SPAGHETTI_2D), probabilityDensity(caveSettings.spaghettiCaveProbability, spaghetti2D(-worldDepth, worldHeight, densityFunctions, noiseParams)));
         
         ctx.register(GRADIENT, RTFDensityFunctions.cell(CellSampler.Field.GRADIENT));
         ctx.register(HEIGHT_EROSION, RTFDensityFunctions.cell(CellSampler.Field.HEIGHT_EROSION));
         ctx.register(SEDIMENT, RTFDensityFunctions.cell(CellSampler.Field.SEDIMENT));
+        PresetDensityKeys.copyVanilla(ctx);
     }
     
     protected static NoiseRouter overworld(Preset preset, HolderGetter<DensityFunction> densityFunctions, HolderGetter<NormalNoise.NoiseParameters> noiseParams, HolderGetter<Noise> noises) {
+        densityFunctions = PresetDensityKeys.remapLookup(densityFunctions);
     	WorldSettings worldSettings = preset.world();
     	WorldSettings.Properties properties = worldSettings.properties;
     	int worldDepth = properties.worldDepth;

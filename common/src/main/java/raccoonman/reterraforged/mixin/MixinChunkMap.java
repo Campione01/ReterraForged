@@ -15,6 +15,7 @@ import net.minecraft.server.level.ChunkMap;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.progress.ChunkProgressListener;
 import net.minecraft.util.thread.BlockableEventLoop;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.LightChunkGetter;
 import net.minecraft.world.level.entity.ChunkStatusUpdateListener;
@@ -23,6 +24,7 @@ import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemp
 import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.level.storage.LevelStorageSource;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
+import raccoonman.reterraforged.world.worldgen.surface.StrataModeReporter;
 
 @Mixin(ChunkMap.class)
 public class MixinChunkMap {
@@ -35,7 +37,10 @@ public class MixinChunkMap {
 	)
 	public void ChunkMap(ServerLevel serverLevel, LevelStorageSource.LevelStorageAccess storageAccess, DataFixer dataFixer, StructureTemplateManager templateLoader, Executor executor, BlockableEventLoop<Runnable> eventLoop, LightChunkGetter lightChunkGetter, ChunkGenerator chunkGenerator, ChunkProgressListener chunkProgressListener, ChunkStatusUpdateListener chunkStatusListener, Supplier<DimensionDataStorage> dimensionStorage, int viewDistance, boolean syncChunkWrites, CallbackInfo callback) {
 		if((Object) this.randomState instanceof RTFRandomState rtfRandomState) {
-			rtfRandomState.initialize(serverLevel);
+			rtfRandomState.initialize(serverLevel, chunkGenerator);
+			if(serverLevel.dimension() == Level.OVERWORLD) {
+				StrataModeReporter.arm(this.randomState, rtfRandomState.generatorContext() != null);
+			}
 		}
 	}
 }

@@ -10,6 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 import raccoonman.reterraforged.world.worldgen.surface.StrataBiomeContext;
+import raccoonman.reterraforged.world.worldgen.surface.StrataModeReporter;
 
 @Mixin(SurfaceSystem.class)
 class MixinStrataBiomeManager {
@@ -17,6 +18,7 @@ class MixinStrataBiomeManager {
 	private SurfaceRules.Context reterraforged$bindStrataBiomes(SurfaceRules.Context context, RandomState state,
 			BiomeManager manager, Registry<Biome> biomes) {
 		((StrataBiomeContext) (Object) context).reterraforged$bindStrataBiomes(manager, biomes);
+		StrataModeReporter.observe(state, manager);
 		return context;
 	}
 }
