@@ -27,11 +27,11 @@ class MixinStrataSurfaceContext implements StrataBiomeContext {
 	public @Nullable StrataBiomeExclusions reterraforged$strataExclusions() {
 		if (!this.reterraforged$strataFilterReady) {
 			var manager = this.reterraforged$strataManager;
-			if (manager == null || manager.getClass() != BiomeManager.class) {
+			if (manager == null || !StrataBiomeExclusions.hasVanillaBounds(manager)) {
 				// Synthetic contexts can use holders from a different registry than the context constructor receives.
 				this.reterraforged$strataFilter = StrataBiomeExclusions.EXACT;
 			} else if (this.reterraforged$strataRegistry.getTag(StrataBiomeExclusions.TAG).filter(tag -> tag.size() > 0).isPresent()) {
-				this.reterraforged$strataFilter = new StrataBiomeExclusions(manager, ((SurfaceRules.Context) (Object) this).chunk);
+				this.reterraforged$strataFilter = StrataBiomeExclusions.forChunk(manager, ((SurfaceRules.Context) (Object) this).chunk);
 			}
 			this.reterraforged$strataFilterReady = true;
 		}

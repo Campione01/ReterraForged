@@ -138,9 +138,9 @@ public record StrataRule(ResourceLocation name, Holder<Noise> selector, List<Str
         	if(this.lastUpdateXZ != this.surfaceContext.lastUpdateXZ) {
         		this.initBuffer(x, z);
         		this.lastUpdateXZ = this.surfaceContext.lastUpdateXZ;
-				this.exclusionQuartY = Integer.MIN_VALUE;
+				if (this.exclusions != null) this.exclusionQuartY = Integer.MIN_VALUE;
         	}
-			if (y <= StrataBiomeExclusions.MAX_YIELD_Y && this.exclusions != null) {
+			if (this.exclusions != null && y <= StrataBiomeExclusions.MAX_YIELD_Y) {
 				int quartY = StrataBiomeExclusions.quart(y);
 				if (this.exclusionQuartY != quartY) {
 					this.exclusionQuartY = quartY;
