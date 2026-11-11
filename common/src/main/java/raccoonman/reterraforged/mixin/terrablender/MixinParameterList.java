@@ -36,6 +36,10 @@ class MixinParameterList<T> {
 	private static final int UNDERGROUND_COMPAT_REGION_WEIGHT = 4;
 	private static final ResourceLocation DARKER_DEPTHS_REGION = ResourceLocation.fromNamespaceAndPath("darkerdepths", "overworld");
 	private static final ResourceLocation DEEPER_DARKER_REGION = ResourceLocation.fromNamespaceAndPath("deeperdarker", "overworld");
+	// The per-lookup counters and their periodic log lines are a debugging aid: -Dreterraforged.terrablenderDiagnostics=true
+	private static final boolean DIAGNOSTIC_COUNTERS = Boolean.getBoolean("reterraforged.terrablenderDiagnostics");
+	// The installed mods never change; resolved on first use because the mod list is not available when this class loads in every environment.
+	private static Boolean undergroundBiomeCompatTarget;
 
 	private int maxIndex;
 	private CompatibilityMode caveCompatibilityMode = CompatibilityMode.AUTO;
@@ -60,9 +64,11 @@ class MixinParameterList<T> {
     	this.maxIndex = Regions.getCount(regionType) - 1;
 		this.caveCompatibilityMode = getCaveCompatibilityMode(registryAccess);
 		if(regionType == RegionType.OVERWORLD && hasUndergroundBiomeCompatTarget()) {
-			this.originalIndexCounts = new AtomicLongArray(this.maxIndex + 1);
-			this.rtfIndexCounts = new AtomicLongArray(this.maxIndex + 1);
-			this.directIndexCounts = new AtomicLongArray(this.maxIndex + 1);
+			if(DIAGNOSTIC_COUNTERS) {
+				this.originalIndexCounts = new AtomicLongArray(this.maxIndex + 1);
+				this.rtfIndexCounts = new AtomicLongArray(this.maxIndex + 1);
+				this.directIndexCounts = new AtomicLongArray(this.maxIndex + 1);
+			}
 			this.darkerDepthsIndex = getRegionIndex(regionType, DARKER_DEPTHS_REGION);
 			this.deeperDarkerIndex = getRegionIndex(regionType, DEEPER_DARKER_REGION);
 			RTFCommon.LOGGER.info(
@@ -139,7 +145,12 @@ class MixinParameterList<T> {
     }
 
 	private static boolean hasUndergroundBiomeCompatTarget() {
-		return ModLoaderUtil.isLoaded("darkerdepths") || ModLoaderUtil.isLoaded("deeperdarker");
+		Boolean target = undergroundBiomeCompatTarget;
+		if(target == null) {
+			target = ModLoaderUtil.isLoaded("darkerdepths") || ModLoaderUtil.isLoaded("deeperdarker");
+			undergroundBiomeCompatTarget = target;
+		}
+		return target;
 	}
 
 	private static CompatibilityMode getCaveCompatibilityMode(RegistryAccess registryAccess) {
