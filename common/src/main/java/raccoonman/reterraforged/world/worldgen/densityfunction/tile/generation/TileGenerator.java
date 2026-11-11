@@ -1,6 +1,7 @@
 package raccoonman.reterraforged.world.worldgen.densityfunction.tile.generation;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.concurrent.pool.ArrayPool;
@@ -24,6 +25,7 @@ public class TileGenerator {
 	private Size tileSizeChunks;
 	private int batchSize;
 	private int batchCount;
+	private Executor executor = ThreadPools.WORLD_GEN;
 	
 	public TileGenerator(Heightmap heightmap, WorldFilters filters, int tileChunks, int tileBorder, int batchCount) {
 		this.heightmap = heightmap;
@@ -48,6 +50,15 @@ public class TileGenerator {
 		return this.heightmap;
 	}
 	
+	public Executor getExecutor() {
+		return this.executor;
+	}
+	
+	// Set once, before the generator is shared with other threads.
+	public void setExecutor(Executor executor) {
+		this.executor = executor;
+	}
+	
 	public void close() {
 		this.heightmap.continent().close();
 		this.filters.close();
@@ -55,6 +66,7 @@ public class TileGenerator {
 	
 	public CompletableFuture<Tile> generate(int tileX, int tileZ) {
 		Tile tile = this.makeTile(tileX, tileZ);
+		Executor executor = this.executor;
 		CompletableFuture<?>[] futures = new CompletableFuture<?>[this.batchCount * this.batchCount];
 		for (int batchZ = 0; batchZ < this.batchCount; batchZ++) {
 			for (int batchX = 0; batchX < this.batchCount; batchX++) {
@@ -83,7 +95,7 @@ public class TileGenerator {
 			            }
 			        }
 				    CellSampler.clearThreadLocalCache();
-				}, ThreadPools.WORLD_GEN);
+				}, executor);
 	        }
 	    }
 		return CompletableFuture.allOf(futures).thenApply((v) -> {
@@ -94,6 +106,7 @@ public class TileGenerator {
 	
 	public CompletableFuture<Tile> generateZoomed(float centerX, float centerZ, float zoom, boolean applyOptionalFilters) {
 		Tile tile = this.makeTile(0, 0);
+		Executor executor = this.executor;
 		CompletableFuture<?>[] futures = new CompletableFuture<?>[this.batchCount * this.batchCount];
         float translateX = centerX - this.tileSizeBlocks.size() * zoom / 2.0F;
         float translateZ = centerZ - this.tileSizeBlocks.size() * zoom / 2.0F;
@@ -124,7 +137,7 @@ public class TileGenerator {
 			            }
 			        }
 				    CellSampler.clearThreadLocalCache();
-				}, ThreadPools.WORLD_GEN);
+				}, executor);
 	        }
 	    }
 		return CompletableFuture.allOf(futures).thenApply((v) -> {

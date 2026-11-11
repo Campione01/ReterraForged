@@ -3,6 +3,7 @@ package raccoonman.reterraforged.world.worldgen;
 import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.HolderGetter;
+import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Heightmap;
 import raccoonman.reterraforged.world.worldgen.cell.heightmap.Levels;
@@ -41,6 +42,13 @@ public class GeneratorContext {
     
     public static GeneratorContext makeUncached(Preset preset, HolderGetter<Noise> noiseLookup, int seed, int tileSize, int tileBorder, int batchCount) {
     	return new GeneratorContext(preset, noiseLookup, seed, tileSize, tileBorder, batchCount, null);
+    }
+
+    // For contexts that only predict terrain: the same tiles, generated on the background pool so they never queue ahead of world generation.
+    public static GeneratorContext makeBackground(Preset preset, HolderGetter<Noise> noiseLookup, int seed, int tileSize, int batchCount, boolean queue) {
+    	GeneratorContext ctx = makeCached(preset, noiseLookup, seed, tileSize, batchCount, queue);
+    	ctx.generator.setExecutor(ThreadPools.BACKGROUND);
+    	return ctx;
     }
 
     // Ends the cache polls and frees the tiles, river maps and erosion tables. The context keeps answering lookups afterwards, uncached.
