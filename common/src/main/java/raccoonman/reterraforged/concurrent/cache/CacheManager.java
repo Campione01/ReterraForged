@@ -27,6 +27,10 @@ public class CacheManager {
 		return cache;
 	}
 	
+	public static void remove(Cache<?> cache) {
+		CACHES.remove(cache);
+	}
+	
 	public static void clear() throws Exception {
 		for(Cache<?> cache : CACHES) {
 			cache.close();
