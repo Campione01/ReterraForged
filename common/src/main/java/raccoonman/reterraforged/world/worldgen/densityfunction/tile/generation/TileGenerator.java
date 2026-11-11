@@ -48,6 +48,11 @@ public class TileGenerator {
 		return this.heightmap;
 	}
 	
+	public void close() {
+		this.heightmap.continent().close();
+		this.filters.close();
+	}
+	
 	public CompletableFuture<Tile> generate(int tileX, int tileZ) {
 		Tile tile = this.makeTile(tileX, tileZ);
 		CompletableFuture<?>[] futures = new CompletableFuture<?>[this.batchCount * this.batchCount];

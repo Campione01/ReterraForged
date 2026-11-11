@@ -29,6 +29,11 @@ public class InfiniteContinentGenerator implements SimpleContinent {
 	}
 
 	@Override
+	public void close() {
+		this.riverCache.close();
+	}
+
+	@Override
 	public long getNearestCenter(float x, float z) {
 		return 0;
 	}

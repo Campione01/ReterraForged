@@ -33,6 +33,11 @@ public abstract class AbstractContinent implements SimpleContinent {
     }
     
     @Override
+    public void close() {
+        this.riverCache.close();
+    }
+    
+    @Override
     public float getDistanceToOcean(int cx, int cz, float dx, float dz) {
         float high = this.getDistanceToEdge(cx, cz, dx, dz);
         float low = 0.0F;

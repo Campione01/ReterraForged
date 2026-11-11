@@ -23,6 +23,7 @@ import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplateManager;
 import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.level.storage.LevelStorageSource;
+import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.RTFRandomState;
 import raccoonman.reterraforged.world.worldgen.surface.StrataModeReporter;
 
@@ -40,6 +41,19 @@ public class MixinChunkMap {
 			rtfRandomState.initialize(serverLevel, chunkGenerator);
 			if(serverLevel.dimension() == Level.OVERWORLD) {
 				StrataModeReporter.arm(this.randomState, rtfRandomState.generatorContext() != null);
+			}
+		}
+	}
+
+	@Inject(
+		at = @At("TAIL"),
+		method = "close"
+	)
+	public void close(CallbackInfo callback) {
+		if((Object) this.randomState instanceof RTFRandomState rtfRandomState) {
+			GeneratorContext generatorContext = rtfRandomState.generatorContext();
+			if(generatorContext != null) {
+				generatorContext.close();
 			}
 		}
 	}

@@ -64,6 +64,11 @@ public abstract class ContinentGenerator implements SimpleContinent {
     }
     
     @Override
+    public void close() {
+        this.cache.close();
+    }
+    
+    @Override
     public void apply(Cell cell, float x, float y) {
         float ox = this.warp.getOffsetX(x, y, 0);
         float oz = this.warp.getOffsetZ(x, y, 0);

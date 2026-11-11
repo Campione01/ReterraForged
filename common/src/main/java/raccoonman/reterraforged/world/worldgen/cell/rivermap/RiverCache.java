@@ -15,6 +15,15 @@ public class RiverCache {
         this.generator = generator;
     }
     
+    public void close() {
+        try {
+            this.cache.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        this.cache.clear();
+    }
+    
     public Rivermap getRivers(int x, int z) {
         return this.cache.computeIfAbsent(PosUtil.pack(x, z), id -> {
         	return this.generator.generateRivers(PosUtil.unpackLeft(id), PosUtil.unpackRight(id), id);

@@ -18,4 +18,7 @@ public interface Continent extends CellPopulator {
     default Rivermap getRivermap(Cell cell) {
         return this.getRivermap(cell.continentX, cell.continentZ);
     }
+    
+    default void close() {
+    }
 }

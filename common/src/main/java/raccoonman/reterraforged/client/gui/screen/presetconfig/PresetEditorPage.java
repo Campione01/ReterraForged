@@ -32,7 +32,6 @@ import raccoonman.reterraforged.client.gui.screen.page.BisectedPage;
 import raccoonman.reterraforged.client.gui.screen.presetconfig.PresetListPage.PresetEntry;
 import raccoonman.reterraforged.client.gui.widget.Slider;
 import raccoonman.reterraforged.client.gui.widget.ValueButton;
-import raccoonman.reterraforged.concurrent.cache.CacheManager;
 import raccoonman.reterraforged.config.PerformanceConfig;
 import raccoonman.reterraforged.data.worldgen.preset.settings.Preset;
 import raccoonman.reterraforged.data.worldgen.preset.settings.SpawnType;
@@ -147,11 +146,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        WorldSettings world = preset.world();
 	        WorldSettings.Properties properties = world.properties;
 	        
-	        try {
-				CacheManager.clear();
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
 			PerformanceConfig config = PerformanceConfig.read(PerformanceConfig.DEFAULT_FILE_PATH)
 				.resultOrPartial(RTFCommon.LOGGER::error)
 				.orElseGet(PerformanceConfig::makeDefault);
@@ -161,7 +155,11 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	        this.centerX = this.offsetX;
 	        this.centerZ = this.offsetZ;
 
-	        this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
+	        try {
+	        	this.tile = generatorContext.generator.generateZoomed(this.centerX, this.centerZ, this.getZoom(), false).join();
+	        } finally {
+	        	generatorContext.close();
+	        }
 	        RenderMode renderMode = PresetEditorPage.this.renderMode.getValue();
 	        Levels levels = new Levels(properties.terrainScaler(), properties.seaLevel);
 
@@ -181,11 +179,6 @@ public abstract class PresetEditorPage extends BisectedPage<PresetConfigScreen, 
 	    
 	    public void close() throws Exception {
 	    	this.texture.close();
-	    	try {
-	   CacheManager.clear();
-	  } catch (Exception e) {
-	   e.printStackTrace();
-	  }
 	    }
 	
 	    @Override

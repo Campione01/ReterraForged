@@ -24,6 +24,15 @@ public class WorldErosion<T> {
 		return this.writeValue(ctx);
 	}
 
+	public void clear() {
+		long stamp = this.lock.writeLock();
+		try {
+			this.value = null;
+		} finally {
+			this.lock.unlockWrite(stamp);
+		}
+	}
+
 	private T readValue() {
 		long optRead = this.lock.tryOptimisticRead();
 		T value = this.value;

@@ -42,6 +42,11 @@ public class FancyContinentGenerator implements Continent {
     }
     
     @Override
+    public void close() {
+        this.riverCache.close();
+    }
+    
+    @Override
     public float getEdgeValue(float x, float y) {
         float px = this.warp.getX(x, y, 0);
         float py = this.warp.getZ(x, y, 0);

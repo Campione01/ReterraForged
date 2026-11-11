@@ -37,6 +37,11 @@ public class WorldFilters {
         return this.settings;
     }
     
+    // Drops the erosion tables; a later tile rebuilds them.
+    public void close() {
+        this.erosion.clear();
+    }
+    
     public void apply(Tile tile, boolean optionalFilters) {
         int regionX = tile.getX();
         int regionZ = tile.getZ();

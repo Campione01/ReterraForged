@@ -42,4 +42,13 @@ public class GeneratorContext {
     public static GeneratorContext makeUncached(Preset preset, HolderGetter<Noise> noiseLookup, int seed, int tileSize, int tileBorder, int batchCount) {
     	return new GeneratorContext(preset, noiseLookup, seed, tileSize, tileBorder, batchCount, null);
     }
+
+    // Ends the cache polls and frees the tiles, river maps and erosion tables. The context keeps answering lookups afterwards, uncached.
+    public void close() {
+    	TileCache cache = this.cache;
+    	if(cache != null) {
+    		cache.close();
+    	}
+    	this.generator.close();
+    }
 }
