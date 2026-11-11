@@ -156,6 +156,14 @@ public class FeatureTemplate {
     }
 
     private <T extends TemplateContext> boolean pasteChecked(LevelAccessor world, T ctx, BlockPos origin, Mirror mirror, Rotation rotation, TemplatePlacement<T> placement, PasteConfig config) {
+        try {
+            return this.pasteCheckedBuffered(world, ctx, origin, mirror, rotation, placement, config);
+        } finally {
+            TEMPLATE_BUFFER.get().release();
+        }
+    }
+
+    private <T extends TemplateContext> boolean pasteCheckedBuffered(LevelAccessor world, T ctx, BlockPos origin, Mirror mirror, Rotation rotation, TemplatePlacement<T> placement, PasteConfig config) {
         Dimensions dimensions = this.dimensions.get(mirror, rotation);
         TemplateRegion region = TEMPLATE_REGION.get().init(origin);
         TemplateBuffer buffer = TEMPLATE_BUFFER.get().init(world, origin, dimensions.min(), dimensions.max());

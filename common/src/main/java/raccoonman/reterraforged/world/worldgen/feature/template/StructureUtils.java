@@ -12,11 +12,10 @@ import net.minecraft.world.level.levelgen.structure.Structure;
 public class StructureUtils {
 
     public static boolean hasOvergroundStructure(HolderLookup<Structure> structures, ChunkAccess chunk) {
-    	Map<Structure, LongSet> references = chunk.getAllReferences();
-    	
-    	for (Structure structure : structures.listElements().map(Holder::value).filter((structure) -> structure.step() == GenerationStep.Decoration.SURFACE_STRUCTURES).toList()) {
-            LongSet refs = references.get(structure);
-            if (refs != null && refs.size() > 0) {
+    	// Walks the chunk's own references rather than the whole structure registry: this runs for every pasted template.
+    	for (Map.Entry<Structure, LongSet> reference : chunk.getAllReferences().entrySet()) {
+            LongSet refs = reference.getValue();
+            if (refs != null && refs.size() > 0 && reference.getKey().step() == GenerationStep.Decoration.SURFACE_STRUCTURES) {
                 return true;
             }
         }

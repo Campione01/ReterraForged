@@ -27,6 +27,12 @@ public class TemplateBuffer extends PasteBuffer {
         return this;
     }
 
+    // The buffer is kept per thread: it must not keep the level of a finished paste.
+    public void release() {
+        this.world = null;
+        this.origin = null;
+    }
+
     public void record(int i, BlockInfo block, BlockPos pastePos, TemplatePlacement<?> placement, PasteConfig config) {
         if (!config.replaceSolid() && !placement.canReplaceAt(this.world, pastePos)) {
         	this.placementMask.set(block.pos().getX(), block.pos().getY(), block.pos().getZ());
