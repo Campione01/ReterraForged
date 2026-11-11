@@ -25,9 +25,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import raccoonman.reterraforged.concurrent.ThreadPools;
 import raccoonman.reterraforged.concurrent.cache.Cache;
+import raccoonman.reterraforged.concurrent.cache.CacheEntry;
+import raccoonman.reterraforged.concurrent.cache.CacheManager;
 import raccoonman.reterraforged.concurrent.cache.ExpiringEntry;
+import raccoonman.reterraforged.concurrent.cache.map.LongMap;
+import raccoonman.reterraforged.concurrent.cache.map.StampedBoundLongMap;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
 import raccoonman.reterraforged.world.worldgen.TestContexts;
+import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCacheFixtures.HeldInsertMap;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.TileCacheFixtures.Scripted;
 
 /** One tile per key, whatever the callers do: together, after a failure, while it is submitted, expired or evicted. */
@@ -61,26 +66,38 @@ class TileSingleFlightTest {
 		CompletableFuture<Tile> gate = new CompletableFuture<>();
 		Scripted generator = new Scripted(source, (x, z) -> gate);
 		TileCache tiles = new TileCache(TestContexts.TILE_SIZE, true, generator);
-		try {
-			CountDownLatch start = new CountDownLatch(1);
-			List<Future<Tile>> lookups = new ArrayList<>();
-			for (int n = 0; n < 16; n++) {
-				lookups.add(threads.submit(() -> {
-					start.await();
-					return tiles.provide(9, 9);
-				}));
+		Cache<?> original = TileCacheFixtures.cacheOf(tiles);
+		original.close();
+		CacheManager.remove(original);
+
+		// Every caller has missed the tile and stands at the insert before the first of them is let through.
+		int callers = 16;
+		CountDownLatch arrived = new CountDownLatch(callers);
+		CountDownLatch proceed = new CountDownLatch(1);
+		LongMap<CacheEntry<?>> held = new HeldInsertMap<>(new StampedBoundLongMap<>(256), () -> {
+			arrived.countDown();
+			try {
+				proceed.await(60, TimeUnit.SECONDS);
+			} catch (InterruptedException e) {
+				Thread.currentThread().interrupt();
 			}
-			start.countDown();
-			TileCacheFixtures.await(() -> generator.calls.get() >= 1, "the tile was not requested");
-			Thread.sleep(200);
-			assertEquals(1, generator.calls.get(), "sixteen callers, one generation");
+		});
+		TileCacheFixtures.replaceCache(tiles, new Cache<>(256, 60L, 20L, TimeUnit.SECONDS, (capacity) -> held));
+		try {
+			List<Future<Tile>> lookups = new ArrayList<>();
+			for (int n = 0; n < callers; n++) {
+				lookups.add(threads.submit(() -> tiles.provide(9, 9)));
+			}
+			assertTrue(arrived.await(60, TimeUnit.SECONDS), "every caller reached the insert");
+			proceed.countDown();
 			gate.complete(tile);
 			for (Future<Tile> lookup : lookups) {
 				assertSame(tile, lookup.get(60, TimeUnit.SECONDS));
 			}
-			assertEquals(1, generator.calls.get());
-			assertEquals(1, TileCacheFixtures.entries(tiles));
+			assertEquals(1, generator.calls.get(), "sixteen callers, one generation");
+			assertEquals(1, held.size());
 		} finally {
+			proceed.countDown();
 			gate.complete(tile);
 			tiles.close();
 		}
