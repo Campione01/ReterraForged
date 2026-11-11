@@ -1,5 +1,7 @@
 package raccoonman.reterraforged.world.worldgen;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
 import net.minecraft.core.HolderGetter;
@@ -14,6 +16,7 @@ import raccoonman.reterraforged.world.worldgen.noise.module.Noise;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
 
 public class GeneratorContext {
+    private static final Logger LOGGER = LogManager.getLogger("ReTerraForged");
     public Seed seed;
     public Levels levels;
     public Preset preset;
@@ -51,12 +54,28 @@ public class GeneratorContext {
     	return ctx;
     }
 
-    // Ends the cache polls and frees the tiles, river maps and erosion tables. The context keeps answering lookups afterwards, uncached.
+    // Ends the cache polls and frees the tiles, river maps and erosion tables. The context keeps answering lookups afterwards:
+    // it then keeps nothing for good, and callers that ask for one tile again and again share one tile.
     public void close() {
-    	TileCache cache = this.cache;
-    	if(cache != null) {
-    		cache.close();
+    	try {
+    		TileCache cache = this.cache;
+    		if(cache != null) {
+    			cache.close();
+    		}
+    	} finally {
+    		this.generator.close();
     	}
-    	this.generator.close();
+    }
+
+    // For a level that is closing: a context that cannot be released must not stop the server from closing its other levels.
+    public static void closeQuietly(@Nullable GeneratorContext context) {
+    	if(context == null) {
+    		return;
+    	}
+    	try {
+    		context.close();
+    	} catch (Throwable failure) {
+    		LOGGER.error("Could not release a generator context; its caches are left to the garbage collector", failure);
+    	}
     }
 }

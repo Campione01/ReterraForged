@@ -51,10 +51,7 @@ public class MixinChunkMap {
 	)
 	public void close(CallbackInfo callback) {
 		if((Object) this.randomState instanceof RTFRandomState rtfRandomState) {
-			GeneratorContext generatorContext = rtfRandomState.generatorContext();
-			if(generatorContext != null) {
-				generatorContext.close();
-			}
+			GeneratorContext.closeQuietly(rtfRandomState.generatorContext());
 		}
 	}
 }

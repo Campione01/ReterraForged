@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.world.worldgen.densityfunction.tile;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -72,6 +73,35 @@ class ContextReleaseTest {
 				String bytes = new String(stream.readAllBytes(), StandardCharsets.ISO_8859_1);
 				assertFalse(bytes.contains("raccoonman/reterraforged/concurrent/cache/CacheManager"), name + " refers to CacheManager");
 			}
+		}
+	}
+
+	@Test
+	void aContextThatCannotBeReleasedDoesNotStopItsLevelFromClosing() throws Exception {
+		GeneratorContext context = TestContexts.cached(42);
+		ScheduledFuture<?> riverPoll = pollOf(riverCacheOf(context));
+		TileCache original = context.cache;
+		context.cache = new TileCache(TestContexts.TILE_SIZE, true, context.generator) {
+			@Override
+			public void close() {
+				super.close();
+				throw new IllegalStateException("this cache cannot be closed");
+			}
+		};
+		try {
+			assertDoesNotThrow(() -> GeneratorContext.closeQuietly(context), "a closing level must not see the failure");
+			assertTrue(riverPoll.isCancelled(), "the rest of the context is still released");
+			assertDoesNotThrow(() -> GeneratorContext.closeQuietly(null));
+		} finally {
+			original.close();
+		}
+
+		// The level closes its context through the guarded call.
+		String path = "/raccoonman/reterraforged/mixin/MixinChunkMap.class";
+		try (InputStream stream = ContextReleaseTest.class.getResourceAsStream(path)) {
+			assertNotNull(stream, path);
+			String bytes = new String(stream.readAllBytes(), StandardCharsets.ISO_8859_1);
+			assertTrue(bytes.contains("closeQuietly"), "ChunkMap.close releases the context without the guard");
 		}
 	}
 

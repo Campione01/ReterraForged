@@ -16,7 +16,7 @@ import raccoonman.reterraforged.world.worldgen.TestContexts;
 import raccoonman.reterraforged.world.worldgen.WorldFilters;
 import raccoonman.reterraforged.world.worldgen.densityfunction.tile.generation.TileGenerator;
 
-/** A tile whose generation failed must not stay in the cache and fail every later request. */
+/** A tile whose generation failed must not fail every later request: after a short while it is generated again. */
 class TileFailureTest {
 	private static final int CHUNK_X = 640;
 	private static final int CHUNK_Z = 1280;
@@ -27,7 +27,7 @@ class TileFailureTest {
 	}
 
 	@Test
-	void aFailedTileIsNotServedAgain() {
+	void aFailedTileIsNotServedAgain() throws Exception {
 		GeneratorContext context = TestContexts.cached(42);
 		AtomicInteger calls = new AtomicInteger();
 		TileGenerator flaky = new TileGenerator(context.generator.getHeightmap(), new WorldFilters(context), TestContexts.TILE_SIZE, 1, TestContexts.BATCH_COUNT) {
@@ -40,11 +40,13 @@ class TileFailureTest {
 			}
 		};
 		TileCache cache = new TileCache(TestContexts.TILE_SIZE, true, flaky);
+		cache.failureRetryMillis = 1L;
 		try {
 			IllegalStateException failure = assertThrows(IllegalStateException.class, () -> cache.provideAtChunk(CHUNK_X, CHUNK_Z));
 			assertEquals("first attempt fails", failure.getMessage());
-			assertNull(cache.provideAtChunkIfPresent(CHUNK_X, CHUNK_Z), "the failed tile is not kept");
+			assertNull(cache.provideAtChunkIfPresent(CHUNK_X, CHUNK_Z), "the failed tile is not a present tile");
 
+			Thread.sleep(20);
 			Tile tile = cache.provideAtChunk(CHUNK_X, CHUNK_Z);
 			assertNotNull(tile, "the next request generates the tile");
 			assertEquals(2, calls.get());

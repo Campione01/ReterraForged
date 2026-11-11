@@ -1,5 +1,6 @@
 package raccoonman.reterraforged.world.worldgen;
 
+import java.lang.ref.SoftReference;
 import java.util.concurrent.locks.StampedLock;
 import java.util.function.IntFunction;
 
@@ -8,6 +9,9 @@ public class WorldErosion<T> {
 	private IntFunction<T> factory;
 	private Validator<T> validator;
 	private StampedLock lock;
+	// After clear: the tables are no longer kept, only remembered while memory allows.
+	private boolean cleared;
+	private SoftReference<T> late;
 
 	public WorldErosion(IntFunction<T> factory, Validator<T> validator) {
 		this.value = null;
@@ -27,6 +31,7 @@ public class WorldErosion<T> {
 	public void clear() {
 		long stamp = this.lock.writeLock();
 		try {
+			this.cleared = true;
 			this.value = null;
 		} finally {
 			this.lock.unlockWrite(stamp);
@@ -50,6 +55,14 @@ public class WorldErosion<T> {
 	private T writeValue(int ctx) {
 		long stamp = this.lock.writeLock();
 		try {
+			if (this.cleared) {
+				T late = this.late != null ? this.late.get() : null;
+				if (!this.validate(late, ctx)) {
+					late = this.factory.apply(ctx);
+					this.late = new SoftReference<>(late);
+				}
+				return late;
+			}
 			if (this.validate(this.value, ctx)) {
 				return this.value;
 			}
