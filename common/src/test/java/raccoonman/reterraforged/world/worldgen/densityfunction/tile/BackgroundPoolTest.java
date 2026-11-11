@@ -82,6 +82,21 @@ class BackgroundPoolTest {
 		}
 	}
 
+	@Test
+	void backgroundThreadsAreDaemonsAtWorkerPriorityThatEndWhenIdle() throws Exception {
+		ThreadPoolExecutor background = ThreadPools.BACKGROUND;
+		Thread worker = CompletableFuture.supplyAsync(Thread::currentThread, ThreadPools.WORLD_GEN).get(30, TimeUnit.SECONDS);
+		Thread thread = CompletableFuture.supplyAsync(Thread::currentThread, background).get(30, TimeUnit.SECONDS);
+		assertTrue(thread.getName().startsWith("RTF background worker #"), thread.getName());
+		assertTrue(thread.isDaemon(), "a background thread must not keep the JVM alive");
+		// A lower priority is opt-in (-Dreterraforged.backgroundPriority): it trades latency for the risk of a
+		// descheduled background thread holding a lock that the shared workers need.
+		assertEquals(worker.getPriority(), thread.getPriority(), "background threads run at the priority of the shared workers");
+		assertTrue(background.allowsCoreThreadTimeOut(), "idle background threads end");
+		assertEquals(60L, background.getKeepAliveTime(TimeUnit.SECONDS));
+		assertEquals(ThreadPools.WORLD_GEN.getMaximumPoolSize(), background.getMaximumPoolSize());
+	}
+
 	private static long settledCompleted(ThreadPoolExecutor pool) throws InterruptedException {
 		// A worker counts a task as completed just after the task's future completes.
 		long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(30);

@@ -10,6 +10,10 @@ public class ThreadPools {
 	private static final AtomicInteger THREAD_COUNTER = new AtomicInteger(0);
 	private static final AtomicInteger BACKGROUND_THREAD_COUNTER = new AtomicInteger(0);
 	public static final ThreadGroup RTF_GROUP = new ThreadGroup("rtf-worldgen");
+	// Background threads run at the priority of the shared workers unless told otherwise: at a lower priority a thread
+	// that is descheduled while it holds a lock of another mod would stall the workers that generate the world.
+	private static final int BACKGROUND_PRIORITY = Math.max(Thread.MIN_PRIORITY,
+		Math.min(Thread.NORM_PRIORITY - 1, Integer.getInteger("reterraforged.backgroundPriority", Thread.NORM_PRIORITY - 1)));
 
 	public static final ThreadPoolExecutor WORLD_GEN = new ThreadPoolExecutor(
 		defaultWorkerThreads(),
@@ -20,7 +24,7 @@ public class ThreadPools {
 		ThreadPools::newWorkerThread
 	);
 	
-	// Tiles of contexts that only predict terrain run here, below the priority of every thread that generates the world.
+	// Tiles of contexts that only predict terrain run here, so they never stand in the queue of the tiles the world waits for.
 	public static final ThreadPoolExecutor BACKGROUND = createBackgroundPool();
 	
 	public static final Executor INVOKING = r -> {
@@ -41,7 +45,7 @@ public class ThreadPools {
 	private static Thread newBackgroundThread(Runnable r) {
 		Thread thread = new Thread(RTF_GROUP, r, "RTF background worker #" + BACKGROUND_THREAD_COUNTER.getAndIncrement());
 		thread.setDaemon(true);
-		thread.setPriority(Thread.MIN_PRIORITY + 1);
+		thread.setPriority(BACKGROUND_PRIORITY);
 		return thread;
 	}
 
