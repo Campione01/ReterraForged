@@ -128,6 +128,40 @@ public class AdvancedContinentGenerator extends AbstractContinent implements Sim
         return this.riverCache.getRivers(x, z);
     }
     
+    @Override
+    protected boolean isSkippedCenter(int centerX, int centerZ) {
+        int xi = NoiseUtil.floor(centerX * this.frequency);
+        int yi = NoiseUtil.floor(centerZ * this.frequency);
+        int radius = (int)Math.ceil(Math.abs(this.jitter)) + 1;
+        for (int cy = yi - radius; cy <= yi + radius; ++cy) {
+            for (int cx = xi - radius; cx <= xi + radius; ++cx) {
+                if (this.isCenterOf(cx, cy, centerX, centerZ)) {
+                    return this.shouldSkip(cx, cy);
+                }
+            }
+        }
+        return false;
+    }
+
+    // The centre of a cell depends on the cell alone, with the same arithmetic as in apply, so the cell can be found from its centre.
+    private boolean isCenterOf(int cellX, int cellY, int centerX, int centerZ) {
+        Vec2f vec = NoiseUtil.cell(this.seed, cellX, cellY);
+        float cellPointX = cellX + vec.x() * this.jitter;
+        float cellPointY = cellY + vec.y() * this.jitter;
+        float sumX = 0.0F;
+        float sumY = 0.0F;
+        for (int cy = cellY - 1; cy <= cellY + 1; ++cy) {
+            for (int cx = cellX - 1; cx <= cellX + 1; ++cx) {
+                if (cx != cellX || cy != cellY) {
+                    Vec2f neighbour = NoiseUtil.cell(this.seed, cx, cy);
+                    sumX += cx + neighbour.x() * this.jitter;
+                    sumY += cy + neighbour.y() * this.jitter;
+                }
+            }
+        }
+        return this.getCorrectedContinentCenter(cellPointX, sumX / 8.0F) == centerX && this.getCorrectedContinentCenter(cellPointY, sumY / 8.0F) == centerZ;
+    }
+
     protected Domain createWarp(Seed seed, int tectonicScale, WorldSettings.Continent continent) {
         int warpScale = NoiseUtil.round(tectonicScale * 0.225F);
         float strength = NoiseUtil.round(tectonicScale * 0.33F);

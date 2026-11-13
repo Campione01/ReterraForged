@@ -3,9 +3,14 @@ package raccoonman.reterraforged.world.worldgen.cell.continent.advanced;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings;
 import raccoonman.reterraforged.data.worldgen.preset.settings.WorldSettings.ControlPoints;
 import raccoonman.reterraforged.world.worldgen.GeneratorContext;
+import raccoonman.reterraforged.world.worldgen.cell.Cell;
 import raccoonman.reterraforged.world.worldgen.cell.continent.SimpleContinent;
 import raccoonman.reterraforged.world.worldgen.cell.continent.simple.SimpleRiverGenerator;
 import raccoonman.reterraforged.world.worldgen.cell.rivermap.RiverCache;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.RiverGenerator;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.Rivermap;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.gen.GenWarp;
+import raccoonman.reterraforged.world.worldgen.cell.rivermap.river.Network;
 import raccoonman.reterraforged.world.worldgen.noise.NoiseUtil;
 import raccoonman.reterraforged.world.worldgen.util.PosUtil;
 import raccoonman.reterraforged.world.worldgen.util.Seed;
@@ -29,9 +34,21 @@ public abstract class AbstractContinent implements SimpleContinent {
         this.skipThreshold = settings.continent.continentSkipping;
         this.hasSkipping = (this.skipThreshold > 0.0F);
         this.controlPoints = settings.controlPoints;
-        this.riverCache = new RiverCache(new SimpleRiverGenerator(this, context));
+        SimpleRiverGenerator rivers = new SimpleRiverGenerator(this, context);
+        this.riverCache = new RiverCache(this.hasSkipping ? this.withoutRiversOnSkippedCells(rivers) : rivers);
     }
     
+    /**
+     * A skipped continent is ocean only. It gets a river map without networks, so no river, lake or wetland is carved into
+     * its sea floor. The decision is taken once per river map, when the cache builds it, and only when skipping is on.
+     */
+    private RiverGenerator withoutRiversOnSkippedCells(RiverGenerator rivers) {
+        return (x, z, id) -> this.isSkippedCenter(x, z) ? new Rivermap(x, z, new Network[0], GenWarp.EMPTY) : rivers.generateRivers(x, z, id);
+    }
+
+    /** Whether the continent whose centre is (centerX, centerZ), as stored in {@link Cell#continentX}, is a skipped cell. */
+    protected abstract boolean isSkippedCenter(int centerX, int centerZ);
+
     @Override
     public void close() {
         this.riverCache.close();
