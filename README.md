@@ -4,6 +4,12 @@
 
 Terrain generation for Minecraft 1.21.1 on NeoForge and Fabric.
 
+## 0.0.8
+
+- A skipped continent (ocean only) no longer gets rivers, lakes or wetlands carved into its sea floor, and river biome no longer appears there. Continents that are not skipped are unchanged.
+- Worley edge noise no longer returns NaN where the two nearest feature points coincide with the sample; every finite value is unchanged.
+- The island beach width slider tops out at 0.45, the value generation already clamps to.
+
 ## 0.0.7
 
 - Restores wetland valley and pool shaping with a gradual mountain-edge fade. Both default presets give each eligible river segment a 50% chance to generate a wetland.
