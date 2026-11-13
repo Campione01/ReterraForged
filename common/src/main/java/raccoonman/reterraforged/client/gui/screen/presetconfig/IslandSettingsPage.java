@@ -90,7 +90,7 @@ public class IslandSettingsPage extends PresetEditorPage {
 			this.regenerate();
 			return value;
 		});
-		this.beachWidth = PresetWidgets.createFloatSlider(island.beachWidth, 0.05F, 0.5F, RTFTranslationKeys.GUI_SLIDER_ISLAND_BEACH_WIDTH, (slider, value) -> {
+		this.beachWidth = PresetWidgets.createFloatSlider(island.beachWidth, 0.05F, 0.45F, RTFTranslationKeys.GUI_SLIDER_ISLAND_BEACH_WIDTH, (slider, value) -> {
 			island.beachWidth = (float) slider.scaleValue(value);
 			this.regenerate();
 			return value;
