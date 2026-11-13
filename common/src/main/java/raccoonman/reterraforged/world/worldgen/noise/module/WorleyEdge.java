@@ -66,6 +66,8 @@ record WorleyEdge(float frequency, float distance, EdgeFunction edgeFunction, Di
                 }
             }
         }
-        return edgeFunction.apply(nearest1, nearest2);
+        float value = edgeFunction.apply(nearest1, nearest2);
+        // DISTANCE_2_DIV is 0/0 when the two nearest feature points both sit on the sample; treat that as standing on a feature point.
+        return Float.isFinite(value) ? value : edgeFunction.min();
     }
 }
